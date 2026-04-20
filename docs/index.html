@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>arc-tables — Database Schema Visualizer & Auditor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --cyan: #00d4ff;
+    --cyan-dim: rgba(0,212,255,0.15);
+    --cyan-glow: rgba(0,212,255,0.4);
+    --green: #00dc82;
+    --green-dim: rgba(0,220,130,0.15);
+    --orange: #ff8c42;
+    --purple: #a855f7;
+    --bg: #050810;
+    --surface: rgba(10,14,30,0.95);
+    --border: rgba(0,200,255,0.12);
+    --text: rgba(220,230,255,0.9);
+    --text-dim: rgba(180,195,230,0.55);
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── ANIMATED GRID BACKGROUND ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(0,212,255,0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(168,85,247,0.05), transparent);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── SCANLINE ── */
+  @keyframes scanline {
+    0% { transform: translateY(-100vh); }
+    100% { transform: translateY(100vh); }
+  }
+  .scanline {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(transparent, rgba(0,212,255,0.06), transparent);
+    animation: scanline 8s linear infinite;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 40px;
+    background: rgba(5,8,16,0.85);
+    backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav-logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    color: var(--cyan);
+    letter-spacing: 2px;
+    text-decoration: none;
+  }
+
+  .nav-logo span { color: var(--text-dim); }
+
+  .nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+  }
+
+  .nav-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+  }
+
+  .nav-links a:hover { color: var(--cyan); }
+
+  .nav-cta {
+    background: transparent;
+    border: 1px solid var(--cyan);
+    color: var(--cyan) !important;
+    padding: 6px 16px;
+    border-radius: 4px;
+    transition: background 0.2s, box-shadow 0.2s !important;
+  }
+
+  .nav-cta:hover {
+    background: var(--cyan-dim) !important;
+    box-shadow: 0 0 16px var(--cyan-glow) !important;
+    color: var(--cyan) !important;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    position: relative;
+    z-index: 2;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 40px 80px;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--green-dim);
+    border: 1px solid rgba(0,220,130,0.25);
+    border-radius: 100px;
+    padding: 4px 14px;
+    font-size: 11px;
+    color: var(--green);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-bottom: 32px;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,220,130,0.4); }
+    50% { opacity: 0.8; box-shadow: 0 0 0 6px rgba(0,220,130,0); }
+  }
+
+  h1 {
+    font-size: clamp(48px, 8vw, 96px);
+    font-weight: 700;
+    letter-spacing: -2px;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  h1 .arc { color: var(--cyan); }
+  h1 .tables { color: #fff; }
+
+  .hero-tagline {
+    font-size: clamp(16px, 2.5vw, 22px);
+    color: var(--text-dim);
+    font-weight: 300;
+    max-width: 600px;
+    margin: 20px auto 48px;
+    line-height: 1.5;
+  }
+
+  .hero-actions {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 80px;
+  }
+
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cyan);
+    color: #050810;
+    font-weight: 600;
+    font-size: 14px;
+    padding: 12px 28px;
+    border-radius: 6px;
+    text-decoration: none;
+    transition: box-shadow 0.2s, transform 0.1s;
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 32px var(--cyan-glow);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    color: var(--text);
+    font-size: 14px;
+    padding: 12px 28px;
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.12);
+    text-decoration: none;
+    transition: border-color 0.2s, background 0.2s;
+  }
+
+  .btn-secondary:hover {
+    border-color: var(--cyan);
+    background: var(--cyan-dim);
+  }
+
+  /* ── TERMINAL DEMO ── */
+  .terminal-demo {
+    width: 100%;
+    max-width: 720px;
+    background: rgba(8,12,24,0.9);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 40px rgba(0,212,255,0.05);
+  }
+
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot-red { background: #ff5f57; }
+  .dot-yellow { background: #ffbd2e; }
+  .dot-green { background: #27c93f; }
+
+  .terminal-title {
+    flex: 1;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+  }
+
+  .terminal-body {
+    padding: 20px 24px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+
+  .t-prompt { color: var(--cyan); }
+  .t-cmd { color: #fff; }
+  .t-flag { color: var(--orange); }
+  .t-str { color: var(--green); }
+  .t-comment { color: rgba(255,255,255,0.2); }
+  .t-output { color: var(--text-dim); }
+  .t-success { color: var(--green); }
+  .t-number { color: var(--orange); }
+
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .cursor {
+    display: inline-block;
+    width: 8px; height: 14px;
+    background: var(--cyan);
+    vertical-align: middle;
+    animation: blink 1.2s step-end infinite;
+    margin-left: 2px;
+  }
+
+  /* ── SECTION LAYOUT ── */
+  section {
+    position: relative;
+    z-index: 2;
+    padding: 100px 40px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin-bottom: 12px;
+  }
+
+  .section-title {
+    font-size: clamp(28px, 4vw, 48px);
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1.1;
+    margin-bottom: 20px;
+  }
+
+  .section-sub {
+    font-size: 17px;
+    color: var(--text-dim);
+    max-width: 560px;
+    line-height: 1.6;
+    margin-bottom: 60px;
+  }
+
+  /* ── FEATURE GRID ── */
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+  }
+
+  .feature-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 28px;
+    transition: border-color 0.3s, box-shadow 0.3s;
+  }
+
+  .feature-card:hover {
+    border-color: rgba(0,212,255,0.3);
+    box-shadow: 0 0 30px rgba(0,212,255,0.06);
+  }
+
+  .feature-icon {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .icon-cyan { background: rgba(0,212,255,0.1); }
+  .icon-green { background: rgba(0,220,130,0.1); }
+  .icon-orange { background: rgba(255,140,66,0.1); }
+  .icon-purple { background: rgba(168,85,247,0.1); }
+
+  .feature-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #fff;
+  }
+
+  .feature-desc {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* ── SCHEMA DEMO VISUAL ── */
+  .schema-demo {
+    position: relative;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    overflow: hidden;
+    height: 480px;
+    margin-bottom: 60px;
+  }
+
+  .schema-demo-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.04) 1px, transparent 1px);
+    background-size: 30px 30px;
+  }
+
+  /* Animated SVG paths */
+  @keyframes dash-flow {
+    to { stroke-dashoffset: -40; }
+  }
+
+  @keyframes dot-travel {
+    0% { offset-distance: 0%; opacity: 0; }
+    5% { opacity: 1; }
+    95% { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+
+  .flow-path {
+    fill: none;
+    stroke: rgba(0,212,255,0.25);
+    stroke-width: 1.5;
+    stroke-dasharray: 6 4;
+    animation: dash-flow 1.5s linear infinite;
+  }
+
+  .flow-path-green {
+    stroke: rgba(0,220,130,0.25);
+  }
+
+  .flow-path-orange {
+    stroke: rgba(255,140,66,0.25);
+  }
+
+  .flow-path-purple {
+    stroke: rgba(168,85,247,0.25);
+  }
+
+  .travel-dot {
+    r: 3;
+    fill: var(--cyan);
+    offset-path: none;
+    animation: dot-travel 2s ease-in-out infinite;
+  }
+
+  /* Table cards in demo */
+  .db-card {
+    position: absolute;
+    background: rgba(10,14,30,0.97);
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    min-width: 140px;
+    transition: transform 0.3s, box-shadow 0.3s;
+  }
+
+  .db-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.6);
+  }
+
+  .db-card-header {
+    padding: 7px 10px;
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .db-card-header .dot-icon {
+    width: 6px; height: 6px; border-radius: 50%;
+  }
+
+  .db-col {
+    padding: 3px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    color: rgba(200,215,255,0.55);
+  }
+
+  .db-col .col-dot {
+    width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0;
+  }
+
+  .col-pk { background: #ffc800; }
+  .col-fk { background: #00d4ff; }
+  .col-int { background: #a855f7; }
+  .col-str { background: #00dc82; }
+  .col-bool { background: #ff8c42; }
+  .col-ts { background: rgba(255,255,255,0.3); }
+
+  .db-col-name { flex: 1; }
+  .db-col-type { color: rgba(180,195,230,0.25); font-size: 9px; }
+
+  .card-cyan .db-card-header { background: rgba(0,212,255,0.12); color: var(--cyan); border-bottom: 1px solid rgba(0,212,255,0.15); }
+  .card-green .db-card-header { background: rgba(0,220,130,0.1); color: var(--green); border-bottom: 1px solid rgba(0,220,130,0.15); }
+  .card-orange .db-card-header { background: rgba(255,140,66,0.1); color: var(--orange); border-bottom: 1px solid rgba(255,140,66,0.15); }
+  .card-purple .db-card-header { background: rgba(168,85,247,0.1); color: var(--purple); border-bottom: 1px solid rgba(168,85,247,0.15); }
+  .card-white .db-card-header { background: rgba(255,255,255,0.05); color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.08); }
+
+  /* ── AUDIT CARD DEMO ── */
+  .audit-demo {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+
+  @media (max-width: 768px) {
+    .audit-demo { grid-template-columns: 1fr; }
+  }
+
+  .audit-card-mock {
+    background: rgba(10,14,30,0.95);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+  }
+
+  .audit-card-top {
+    padding: 16px 20px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .audit-cat-tag {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 3px 10px;
+    border-radius: 100px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .tag-naming { background: rgba(0,212,255,0.12); color: var(--cyan); }
+  .tag-cleanup { background: rgba(255,140,66,0.12); color: var(--orange); }
+  .tag-connection { background: rgba(168,85,247,0.12); color: var(--purple); }
+  .tag-structure { background: rgba(0,220,130,0.12); color: var(--green); }
+
+  .audit-sev {
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255,200,0,0.7);
+  }
+
+  .audit-sev-error { color: rgba(255,80,80,0.8); }
+
+  .audit-loc {
+    padding: 0 20px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: rgba(0,212,255,0.5);
+    letter-spacing: 1px;
+  }
+
+  .audit-title {
+    padding: 0 20px 10px;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    line-height: 1.3;
+  }
+
+  .audit-body {
+    padding: 0 20px 16px;
+  }
+
+  .audit-body p {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 10px;
+  }
+
+  .audit-body strong { color: rgba(0,212,255,0.75); font-weight: 500; }
+
+  .audit-actions {
+    display: flex;
+    gap: 10px;
+    padding: 12px 20px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    background: rgba(255,255,255,0.01);
+  }
+
+  .audit-btn {
+    flex: 1;
+    padding: 8px;
+    border-radius: 6px;
+    border: none;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    text-align: center;
+  }
+
+  .audit-btn-accept {
+    background: rgba(0,220,130,0.15);
+    color: var(--green);
+    border: 1px solid rgba(0,220,130,0.2);
+  }
+
+  .audit-btn-skip {
+    background: rgba(255,255,255,0.04);
+    color: var(--text-dim);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .audit-btn-dismiss {
+    background: rgba(255,80,80,0.1);
+    color: rgba(255,80,80,0.7);
+    border: 1px solid rgba(255,80,80,0.15);
+  }
+
+  .audit-counter {
+    text-align: center;
+    padding: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    letter-spacing: 1px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .audit-stack {
+    position: relative;
+  }
+
+  .audit-stack .audit-card-mock:nth-child(2) {
+    position: absolute;
+    top: 12px; left: -8px; right: -8px;
+    opacity: 0.4;
+    z-index: -1;
+    pointer-events: none;
+    transform: scale(0.97);
+  }
+
+  .audit-stack .audit-card-mock:nth-child(3) {
+    position: absolute;
+    top: 22px; left: -14px; right: -14px;
+    opacity: 0.2;
+    z-index: -2;
+    pointer-events: none;
+    transform: scale(0.94);
+  }
+
+  /* ── HOW IT WORKS ── */
+  .how-steps {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0;
+    position: relative;
+  }
+
+  .how-steps::before {
+    content: '';
+    position: absolute;
+    top: 24px;
+    left: 10%;
+    right: 10%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), var(--border), transparent);
+  }
+
+  .how-step {
+    text-align: center;
+    padding: 0 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-num {
+    width: 48px; height: 48px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    color: var(--cyan);
+    margin: 0 auto 20px;
+    position: relative;
+  }
+
+  .step-num::after {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(0,212,255,0.1), transparent 70%);
+  }
+
+  .step-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 8px;
+  }
+
+  .step-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+    line-height: 1.5;
+  }
+
+  /* ── RULES GRID ── */
+  .rules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 12px;
+  }
+
+  .rule-chip {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    transition: border-color 0.2s;
+  }
+
+  .rule-chip:hover { border-color: rgba(0,212,255,0.25); }
+
+  .rule-num {
+    width: 24px; height: 24px; flex-shrink: 0;
+    border-radius: 4px;
+    background: rgba(0,212,255,0.08);
+    border: 1px solid rgba(0,212,255,0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--cyan);
+  }
+
+  .rule-text { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+  .rule-text strong { display: block; color: #fff; font-size: 13px; margin-bottom: 2px; }
+
+  /* ── INSTALL ── */
+  .install-block {
+    background: rgba(8,12,24,0.9);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 640px;
+  }
+
+  .install-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .install-body {
+    padding: 16px 20px;
+  }
+
+  .install-line {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.8;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    position: relative;
+    z-index: 2;
+    border-top: 1px solid var(--border);
+    padding: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .footer-logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--cyan);
+    letter-spacing: 2px;
+  }
+
+  .footer-links {
+    display: flex;
+    gap: 24px;
+    list-style: none;
+  }
+
+  .footer-links a {
+    color: var(--text-dim);
+    text-decoration: none;
+    font-size: 12px;
+    transition: color 0.2s;
+  }
+
+  .footer-links a:hover { color: var(--cyan); }
+
+  .footer-copy {
+    font-size: 11px;
+    color: rgba(255,255,255,0.15);
+    letter-spacing: 0.5px;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ── GLOW ACCENT ── */
+  .glow-accent {
+    position: absolute;
+    width: 600px; height: 600px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="scanline"></div>
+
+<nav>
+  <a href="#" class="nav-logo">arc<span>-</span>tables</a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#rules">Audit rules</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="https://github.com/arc-web/arc-tables" class="nav-cta">GitHub</a></li>
+  </ul>
+</nav>
+
+<!-- ── HERO ── -->
+<div class="hero">
+  <div class="hero-badge">Open source &mdash; MIT license</div>
+
+  <h1>
+    <span class="arc">arc</span><span class="tables">-tables</span>
+  </h1>
+
+  <p class="hero-tagline">
+    Point it at any Postgres or Supabase database.<br>
+    Get beautiful interactive HTML maps and a plain-English audit with the exact SQL to fix every issue.
+  </p>
+
+  <div class="hero-actions">
+    <a href="#install" class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 12H7v-5h2v5zm0-7H7V3h2v2z"/></svg>
+      Get started
+    </a>
+    <a href="https://github.com/arc-web/arc-tables" class="btn-secondary">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+
+  <div class="terminal-demo">
+    <div class="terminal-bar">
+      <div class="dot dot-red"></div>
+      <div class="dot dot-yellow"></div>
+      <div class="dot dot-green"></div>
+      <div class="terminal-title">arc-tables — zsh</div>
+    </div>
+    <div class="terminal-body">
+      <div><span class="t-prompt">$</span> <span class="t-cmd">arc-tables connect supabase</span> <span class="t-flag">--project</span> <span class="t-str">pqwfnhblts</span> <span class="t-flag">--as</span> <span class="t-str">arc-prod</span></div>
+      <div class="t-output">&#x2714; Connected to arc-prod (166 tables, 12 views)</div>
+      <br>
+      <div><span class="t-prompt">$</span> <span class="t-cmd">arc-tables audit</span> <span class="t-flag">--profile</span> <span class="t-str">arc-prod</span> <span class="t-flag">--format</span> <span class="t-str">cards</span> <span class="t-flag">--output</span> <span class="t-str">audit.html</span></div>
+      <div class="t-output">Introspecting schema public...</div>
+      <div class="t-output">Running <span class="t-number">9</span> audit rules across <span class="t-number">166</span> tables...</div>
+      <div class="t-success">&#x2714; Found <span class="t-number">144</span> issues &mdash; <span class="t-number">12</span> errors &middot; <span class="t-number">67</span> warnings &middot; <span class="t-number">65</span> info</div>
+      <div class="t-success">&#x2714; Wrote card report: audit.html</div>
+      <div class="t-success">&#x2714; Wrote SQL: fixes.sql</div>
+      <br>
+      <div><span class="t-prompt">$</span> <span class="t-cmd">open audit.html</span> <span class="cursor"></span></div>
+    </div>
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<!-- ── SCHEMA MAP DEMO ── -->
+<section id="features">
+  <div class="section-label">Schema visualization</div>
+  <h2 class="section-title">Your database at a glance</h2>
+  <p class="section-sub">Every table, every foreign key, color-coded by group. Hover to isolate. Click to explore. All in a single HTML file &mdash; no server, no deps.</p>
+
+  <div class="schema-demo">
+    <div class="schema-demo-bg"></div>
+
+    <svg style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;" xmlns="http://www.w3.org/2000/svg">
+      <!-- companies → clients -->
+      <path class="flow-path" d="M 240 115 C 290 115 310 200 360 200"/>
+      <!-- clients → client_contacts -->
+      <path class="flow-path" d="M 500 200 C 550 200 560 300 580 300"/>
+      <!-- clients → client_transactions -->
+      <path class="flow-path flow-path-green" d="M 500 220 C 560 220 570 370 600 370"/>
+      <!-- contacts → client_contacts -->
+      <path class="flow-path flow-path-purple" d="M 240 290 C 300 290 380 310 580 310"/>
+      <!-- leads → clients -->
+      <path class="flow-path flow-path-orange" d="M 120 360 C 160 340 280 250 360 225"/>
+      <!-- stripe_clients → client_transactions -->
+      <path class="flow-path flow-path-green" d="M 750 290 C 730 310 680 360 700 380"/>
+
+      <!-- Animated travel dots -->
+      <circle r="3" fill="#00d4ff" opacity="0.8">
+        <animateMotion dur="3s" repeatCount="indefinite" begin="0s">
+          <mpath href="#path-comp-cli"/>
+        </animateMotion>
+      </circle>
+      <circle r="3" fill="#00dc82" opacity="0.8">
+        <animateMotion dur="2.5s" repeatCount="indefinite" begin="0.8s">
+          <mpath href="#path-cli-trans"/>
+        </animateMotion>
+      </circle>
+      <circle r="3" fill="#ff8c42" opacity="0.8">
+        <animateMotion dur="3.5s" repeatCount="indefinite" begin="1.5s">
+          <mpath href="#path-leads-cli"/>
+        </animateMotion>
+      </circle>
+
+      <defs>
+        <path id="path-comp-cli" d="M 240 115 C 290 115 310 200 360 200"/>
+        <path id="path-cli-trans" d="M 500 220 C 560 220 570 370 600 370"/>
+        <path id="path-leads-cli" d="M 120 360 C 160 340 280 250 360 225"/>
+      </defs>
+    </svg>
+
+    <!-- companies -->
+    <div class="db-card card-white" style="left:60px;top:70px;">
+      <div class="db-card-header"><div class="dot-icon" style="background:rgba(255,255,255,0.5)"></div>companies</div>
+      <div class="db-col"><div class="col-dot col-pk"></div><span class="db-col-name">id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-str"></div><span class="db-col-name">company_name</span><span class="db-col-type">text</span></div>
+      <div class="db-col"><div class="col-dot col-str"></div><span class="db-col-name">domain</span><span class="db-col-type">text</span></div>
+    </div>
+
+    <!-- contacts -->
+    <div class="db-card card-white" style="left:60px;top:255px;">
+      <div class="db-card-header"><div class="dot-icon" style="background:rgba(255,255,255,0.5)"></div>contacts</div>
+      <div class="db-col"><div class="col-dot col-pk"></div><span class="db-col-name">id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-str"></div><span class="db-col-name">full_name</span><span class="db-col-type">text</span></div>
+      <div class="db-col"><div class="col-dot col-str"></div><span class="db-col-name">email</span><span class="db-col-type">text</span></div>
+    </div>
+
+    <!-- leads -->
+    <div class="db-card card-orange" style="left:60px;top:335px;">
+      <div class="db-card-header"><div class="dot-icon" style="background:#ff8c42"></div>leads</div>
+      <div class="db-col"><div class="col-dot col-pk"></div><span class="db-col-name">id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">company_id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-str"></div><span class="db-col-name">stage</span><span class="db-col-type">text</span></div>
+    </div>
+
+    <!-- clients (center/hero) -->
+    <div class="db-card card-cyan" style="left:360px;top:155px;min-width:160px;box-shadow:0 0 40px rgba(0,212,255,0.15),0 8px 24px rgba(0,0,0,0.5);">
+      <div class="db-card-header"><div class="dot-icon" style="background:#00d4ff"></div>clients</div>
+      <div class="db-col"><div class="col-dot col-pk"></div><span class="db-col-name">id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">company_id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">lead_id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-ts"></div><span class="db-col-name">created_at</span><span class="db-col-type">ts</span></div>
+      <div class="db-col"><div class="col-dot col-bool"></div><span class="db-col-name">active</span><span class="db-col-type">bool</span></div>
+    </div>
+
+    <!-- client_contacts -->
+    <div class="db-card card-purple" style="left:575px;top:270px;">
+      <div class="db-card-header"><div class="dot-icon" style="background:#a855f7"></div>client_contacts</div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">client_id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">contact_id</span><span class="db-col-type">uuid</span></div>
+    </div>
+
+    <!-- client_transactions -->
+    <div class="db-card card-green" style="left:575px;top:350px;min-width:160px;">
+      <div class="db-card-header"><div class="dot-icon" style="background:#00dc82"></div>client_transactions</div>
+      <div class="db-col"><div class="col-dot col-pk"></div><span class="db-col-name">id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">client_id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-int"></div><span class="db-col-name">amount</span><span class="db-col-type">int</span></div>
+    </div>
+
+    <!-- stripe_clients -->
+    <div class="db-card card-green" style="right:40px;top:255px;">
+      <div class="db-card-header"><div class="dot-icon" style="background:#00dc82"></div>stripe_clients</div>
+      <div class="db-col"><div class="col-dot col-fk"></div><span class="db-col-name">client_id</span><span class="db-col-type">uuid</span></div>
+      <div class="db-col"><div class="col-dot col-str"></div><span class="db-col-name">stripe_id</span><span class="db-col-type">text</span></div>
+    </div>
+
+    <!-- Legend -->
+    <div style="position:absolute;bottom:16px;left:20px;display:flex;gap:16px;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(255,255,255,0.3);">
+        <div style="width:24px;height:1px;background:rgba(0,212,255,0.4);"></div> FK link
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:9px;color:rgba(255,255,255,0.2);">
+        <div style="width:5px;height:5px;border-radius:50%;background:#ffc800;"></div> PK
+        <div style="width:5px;height:5px;border-radius:50%;background:#00d4ff;"></div> FK
+        <div style="width:5px;height:5px;border-radius:50%;background:#00dc82;"></div> text
+        <div style="width:5px;height:5px;border-radius:50%;background:#a855f7;"></div> int
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature grid -->
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="feature-icon icon-cyan">&#x1F5FA;</div>
+      <div class="feature-title">Full ecosystem map</div>
+      <div class="feature-desc">Every table laid out with color-coded groups, animated FK flow lines, and hover-to-isolate. Single HTML file, no server needed.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-green">&#x1F4CA;</div>
+      <div class="feature-title">Lifecycle flow diagrams</div>
+      <div class="feature-desc">Trace how data moves from leads through to clients and transactions. Pick any path through your schema and get a focused flow view.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-orange">&#x1F9FE;</div>
+      <div class="feature-title">Plain-English audit cards</div>
+      <div class="feature-desc">Tinder-style issue review. Each card explains the problem, why it matters, and the fix in plain English &mdash; not just the raw SQL.</div>
+    </div>
+    <div class="feature-card">
+      <div class="feature-icon icon-purple">&#x1F517;</div>
+      <div class="feature-title">Diagram per issue</div>
+      <div class="feature-desc">Every audit card has a diagram button that centers the affected table on an interactive canvas with all FK neighbors. Pan &amp; zoom to explore.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── AUDIT CARD DEMO ── -->
+<section>
+  <div class="section-label">Audit review</div>
+  <h2 class="section-title">Issues, not noise</h2>
+  <p class="section-sub">One card at a time. Accept the fix, skip it, or dismiss. Notes persist to localStorage. Each card links to a live diagram of the affected table.</p>
+
+  <div class="audit-demo">
+    <div class="audit-stack">
+      <!-- Ghost cards behind -->
+      <div class="audit-card-mock" style="position:absolute;top:22px;left:-14px;right:-14px;opacity:0.2;z-index:-2;transform:scale(0.94);">
+        <div style="height:160px;"></div>
+      </div>
+      <div class="audit-card-mock" style="position:absolute;top:12px;left:-8px;right:-8px;opacity:0.4;z-index:-1;transform:scale(0.97);">
+        <div style="height:160px;"></div>
+      </div>
+      <!-- Active card -->
+      <div class="audit-card-mock">
+        <div class="audit-card-top">
+          <div class="audit-cat-tag tag-connection">connection</div>
+          <div class="audit-sev">&#x26A0; warning</div>
+        </div>
+        <div class="audit-loc">client_information . client_name</div>
+        <div class="audit-title">This column uses a name to link tables instead of an ID</div>
+        <div class="audit-body">
+          <p><strong>What:</strong> <code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(0,212,255,0.6)">client_information.client_name</code> references <code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(0,212,255,0.6)">clients.name</code> as text instead of using <code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(0,212,255,0.6)">clients.id</code>.</p>
+          <p><strong>Why it matters:</strong> If a client is ever renamed, this link silently breaks. Name-based joins are also slower and can't enforce referential integrity.</p>
+          <p><strong>Fix:</strong> Add a <code style="font-family:'JetBrains Mono',monospace;font-size:11px;color:rgba(0,212,255,0.6)">client_id uuid</code> column with a real FK constraint, backfill from the name match, then drop the old text column.</p>
+        </div>
+        <div class="audit-actions">
+          <div class="audit-btn audit-btn-dismiss">&#x2717; Dismiss</div>
+          <div class="audit-btn audit-btn-skip">Skip</div>
+          <div class="audit-btn audit-btn-accept">&#x2713; Accept fix</div>
+        </div>
+        <div class="audit-counter">issue 7 of 144 &middot; 3 accepted &middot; 1 dismissed</div>
+      </div>
+    </div>
+
+    <div>
+      <div style="margin-bottom:20px;">
+        <div class="section-label" style="margin-bottom:8px;">Categories</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;">
+          <div class="audit-cat-tag tag-naming" style="padding:5px 14px;">&#x1F3F7; naming</div>
+          <div class="audit-cat-tag tag-cleanup" style="padding:5px 14px;">&#x1F9F9; cleanup</div>
+          <div class="audit-cat-tag tag-connection" style="padding:5px 14px;">&#x1F517; connection</div>
+          <div class="audit-cat-tag tag-structure" style="padding:5px 14px;">&#x1F3D7; structure</div>
+          <div style="background:rgba(255,80,80,0.1);color:rgba(255,80,80,0.75);padding:5px 14px;border-radius:100px;font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-family:'JetBrains Mono',monospace;">&#x274C; broken</div>
+        </div>
+      </div>
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;">
+        <div style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-dim);margin-bottom:14px;">Session progress</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:var(--text-dim);">Total issues</span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#fff;">144</span>
+          </div>
+          <div style="height:4px;background:rgba(255,255,255,0.05);border-radius:2px;overflow:hidden;">
+            <div style="width:5%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--green));border-radius:2px;"></div>
+          </div>
+          <div style="display:flex;gap:16px;">
+            <div style="text-align:center;">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--green);font-weight:600;">3</div>
+              <div style="font-size:10px;color:var(--text-dim);letter-spacing:0.5px;">Accepted</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:rgba(255,80,80,0.7);font-weight:600;">1</div>
+              <div style="font-size:10px;color:var(--text-dim);letter-spacing:0.5px;">Dismissed</div>
+            </div>
+            <div style="text-align:center;">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:18px;color:var(--text-dim);font-weight:600;">140</div>
+              <div style="font-size:10px;color:var(--text-dim);letter-spacing:0.5px;">Remaining</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── HOW IT WORKS ── -->
+<section id="how">
+  <div style="text-align:center;margin-bottom:60px;">
+    <div class="section-label">How it works</div>
+    <h2 class="section-title">Three commands, full picture</h2>
+  </div>
+
+  <div class="how-steps">
+    <div class="how-step">
+      <div class="step-num">01</div>
+      <div class="step-title">Connect</div>
+      <div class="step-desc">Point arc-tables at your Supabase project or Postgres connection string. Credentials stay on your machine.</div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">02</div>
+      <div class="step-title">Introspect</div>
+      <div class="step-desc">Reads all tables, columns, foreign keys, views, and indexes. No schema changes, read-only queries only.</div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">03</div>
+      <div class="step-title">Generate</div>
+      <div class="step-desc">Outputs a self-contained HTML file. Map, flow diagram, or card-based audit report &mdash; your choice.</div>
+    </div>
+    <div class="how-step">
+      <div class="step-num">04</div>
+      <div class="step-title">Fix</div>
+      <div class="step-desc">Review the issues in your browser. Accept fixes to build a <code style="font-size:11px;color:var(--cyan)">fixes.sql</code> file. Run it when you're ready.</div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── RULES ── -->
+<section id="rules">
+  <div class="section-label">Built-in audit rules</div>
+  <h2 class="section-title">9 rules, zero config</h2>
+  <p class="section-sub">Every rule ships with the exact SQL to fix the problem and plain-English explanations anyone can read.</p>
+
+  <div class="rules-grid">
+    <div class="rule-chip"><div class="rule-num">01</div><div class="rule-text"><strong>Duplicate-prefix orphans</strong>Finds plural/singular mismatches like <code style="font-size:11px;color:rgba(0,212,255,0.6)">clients_X</code> vs <code style="font-size:11px;color:rgba(0,212,255,0.6)">client_X</code></div></div>
+    <div class="rule-chip"><div class="rule-num">02</div><div class="rule-text"><strong>String FK columns</strong>Detects name-based links that should be ID-based FK constraints</div></div>
+    <div class="rule-chip"><div class="rule-num">03</div><div class="rule-text"><strong>Ambiguous name columns</strong>Flags bare <code style="font-size:11px;color:rgba(0,212,255,0.6)">name</code> columns that collide across joins</div></div>
+    <div class="rule-chip"><div class="rule-num">04</div><div class="rule-text"><strong>Deprecated columns</strong>Finds <code style="font-size:11px;color:rgba(0,212,255,0.6)">*_deprecated</code> columns left in place after migration</div></div>
+    <div class="rule-chip"><div class="rule-num">05</div><div class="rule-text"><strong>Orphan tables</strong>Tables with no FK in or out &mdash; likely abandoned or missing a link</div></div>
+    <div class="rule-chip"><div class="rule-num">06</div><div class="rule-text"><strong>Single-row satellites</strong>Tables that could be columns &mdash; one row per parent, no time axis</div></div>
+    <div class="rule-chip"><div class="rule-num">07</div><div class="rule-text"><strong>Empty staging tables</strong>Finds <code style="font-size:11px;color:rgba(0,212,255,0.6)">*_staging</code> and <code style="font-size:11px;color:rgba(0,212,255,0.6)">temp_*</code> tables with zero rows</div></div>
+    <div class="rule-chip"><div class="rule-num">08</div><div class="rule-text"><strong>Casing duplicates</strong>Detects <code style="font-size:11px;color:rgba(0,212,255,0.6)">Foo</code> and <code style="font-size:11px;color:rgba(0,212,255,0.6)">foo</code> both existing in the same schema</div></div>
+    <div class="rule-chip"><div class="rule-num">09</div><div class="rule-text"><strong>Broken views</strong>Views that reference columns or tables that no longer exist</div></div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── INSTALL ── -->
+<section id="install">
+  <div class="section-label">Installation</div>
+  <h2 class="section-title">Get started in 30 seconds</h2>
+  <p class="section-sub">Install globally via npm, connect to your database, and generate your first audit.</p>
+
+  <div style="display:flex;flex-direction:column;gap:16px;max-width:660px;">
+    <div class="install-block">
+      <div class="install-bar">
+        <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);margin-left:8px;letter-spacing:1px;">Install</span>
+      </div>
+      <div class="install-body">
+        <div class="install-line"><span class="t-comment"># install globally</span></div>
+        <div class="install-line"><span class="t-prompt">$</span> <span class="t-cmd">npm install -g @arc-web/arc-tables</span></div>
+        <br>
+        <div class="install-line"><span class="t-comment"># or run without installing</span></div>
+        <div class="install-line"><span class="t-prompt">$</span> <span class="t-cmd">npx @arc-web/arc-tables</span> <span class="t-flag">--help</span></div>
+      </div>
+    </div>
+
+    <div class="install-block">
+      <div class="install-bar">
+        <div class="dot dot-red"></div><div class="dot dot-yellow"></div><div class="dot dot-green"></div>
+        <span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--text-dim);margin-left:8px;letter-spacing:1px;">Quick start</span>
+      </div>
+      <div class="install-body">
+        <div class="install-line"><span class="t-comment"># connect to Supabase</span></div>
+        <div class="install-line"><span class="t-prompt">$</span> <span class="t-cmd">arc-tables connect supabase</span> <span class="t-flag">--project</span> <span class="t-str">your-project-ref</span> <span class="t-flag">--as</span> <span class="t-str">mydb</span></div>
+        <br>
+        <div class="install-line"><span class="t-comment"># generate the full schema map</span></div>
+        <div class="install-line"><span class="t-prompt">$</span> <span class="t-cmd">arc-tables map</span> <span class="t-flag">--profile</span> <span class="t-str">mydb</span> <span class="t-flag">--output</span> <span class="t-str">schema.html</span></div>
+        <br>
+        <div class="install-line"><span class="t-comment"># run the audit (card view)</span></div>
+        <div class="install-line"><span class="t-prompt">$</span> <span class="t-cmd">arc-tables audit</span> <span class="t-flag">--profile</span> <span class="t-str">mydb</span> <span class="t-flag">--format</span> <span class="t-str">cards</span> <span class="t-flag">--output</span> <span class="t-str">audit.html</span></div>
+        <div class="t-success" style="padding-top:8px;">&#x2714; Open audit.html in your browser. Review issues, accept fixes, run fixes.sql.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-logo">arc-tables</div>
+  <ul class="footer-links">
+    <li><a href="https://github.com/arc-web/arc-tables">GitHub</a></li>
+    <li><a href="https://github.com/arc-web/arc-tables/issues">Issues</a></li>
+    <li><a href="https://github.com/arc-web/arc-tables/blob/main/README.md">Docs</a></li>
+  </ul>
+  <div class="footer-copy">MIT license &middot; arc-web</div>
+</footer>
+
+</body>
+</html>
