@@ -57,6 +57,7 @@ program
   .option('--schema <name>', 'Database schema', 'public')
   .option('--output <file>', 'Output HTML report', 'arc-tables-audit.html')
   .option('--sql <file>', 'Output SQL fix file', 'arc-tables-fixes.sql')
+  .option('--format <kind>', 'Report format: cards | list', 'cards')
   .action(async (opts) => {
     const { audit } = await import('./commands/audit.js');
     await audit(opts);

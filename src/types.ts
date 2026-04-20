@@ -72,12 +72,23 @@ export interface Adapter {
   close(): Promise<void>;
 }
 
-// Audit finding - emitted by each rule
+// Audit finding - emitted by each rule.
+// Every finding ships with both technical AND plain-English versions so the same
+// data can render to a dev-focused list OR a friendly card review UI.
 export interface AuditFinding {
   rule: string;
   severity: 'info' | 'warning' | 'error';
   table?: string;
   column?: string;
+
+  // Technical (for devs / list view / fixes.sql comments)
   description: string;
   fixSql?: string;
+
+  // Plain English (for the card review UI - non-devs friendly)
+  plainTitle: string;            // short headline, max ~60 chars
+  plainWhat: string;             // 1-2 sentences: what's going on
+  plainWhy: string;              // why it matters / what happens if ignored
+  plainFix: string;              // what fixing it looks like in everyday words
+  category: 'naming' | 'cleanup' | 'connection' | 'structure' | 'broken';
 }

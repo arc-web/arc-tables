@@ -1,6 +1,3 @@
-// Detects tables with no FKs in or out (relationally isolated).
-// Doesn't always mean delete - could be lookup tables - but flags for human review.
-
 import type { Schema, AuditFinding } from '../../types.js';
 
 export function orphanTableRule(schema: Schema): AuditFinding[] {
@@ -17,7 +14,12 @@ export function orphanTableRule(schema: Schema): AuditFinding[] {
         rule: 'orphan-table',
         severity: 'info',
         table: t.name,
-        description: `Table "${t.name}" has no foreign keys in or out. Verify it's still in use, or drop if obsolete.`,
+        category: 'cleanup',
+        description: `Table "${t.name}" has no foreign keys in or out.`,
+        plainTitle: `"${t.name}" doesn't connect to anything else`,
+        plainWhat: `This table is sitting alone in your database. Nothing links into it, and it doesn't link out to anything either. It's a relational island.`,
+        plainWhy: `Could be a totally fine standalone table (a list of countries, a settings store, a log). Or it could be leftover from an old experiment that nobody removed. Worth a quick "is this still in use?" check.`,
+        plainFix: `If it's still being used by your apps or agents, leave it. If it's leftover, drop it.`,
       });
     }
   }

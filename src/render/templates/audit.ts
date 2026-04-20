@@ -18,7 +18,10 @@ export function renderAudit(schema: Schema, findings: AuditFinding[]): string {
         .map((f) => `
 <div class="finding ${escape(f.severity)}">
   <div class="loc">${escape(f.table ?? '\u2014')}${f.column ? ' . ' + escape(f.column) : ''}</div>
-  <div class="desc">${escape(f.description)}</div>
+  <div class="title">${escape(f.plainTitle)}</div>
+  <div class="desc">${escape(f.plainWhat)}</div>
+  <div class="why"><strong>Why it matters:</strong> ${escape(f.plainWhy)}</div>
+  <div class="fix"><strong>Fix:</strong> ${escape(f.plainFix)}</div>
   ${f.fixSql ? `<pre class="sql"><code>${escape(f.fixSql)}</code></pre>` : ''}
 </div>`).join('');
       return `
@@ -39,8 +42,11 @@ section.rule h2 { font-size:11px; letter-spacing:2px; text-transform:uppercase; 
 section.rule h2 .ct { font-size:9px; color:rgba(255,255,255,0.3); letter-spacing:1px; }
 .finding { padding:10px 0; border-top:1px solid rgba(255,255,255,0.05); }
 .finding:first-of-type { border-top:none; padding-top:0; }
-.finding .loc { font-size:10px; color:rgba(0,212,255,0.7); margin-bottom:4px; letter-spacing:1px; }
-.finding .desc { font-size:11px; color:rgba(220,225,255,0.7); margin-bottom:6px; line-height:1.5; }
+.finding .loc { font-size:10px; color:rgba(0,212,255,0.7); margin-bottom:4px; letter-spacing:1px; font-family:'SF Mono', monospace; }
+.finding .title { font-size:14px; color:#fff; margin-bottom:8px; font-family:system-ui, sans-serif; font-weight:600; }
+.finding .desc { font-size:13px; color:rgba(220,225,255,0.75); margin-bottom:6px; line-height:1.55; font-family:system-ui, sans-serif; }
+.finding .why, .finding .fix { font-size:12px; color:rgba(200,210,255,0.6); margin-bottom:5px; line-height:1.5; font-family:system-ui, sans-serif; }
+.finding strong { color:rgba(0,212,255,0.8); font-weight:600; }
 .finding.error .loc { color:#ff5050; }
 .finding.warning .loc { color:#ffc800; }
 pre.sql { background:rgba(0,0,0,0.4); border:1px solid rgba(0,200,255,0.15); border-radius:6px; padding:10px 14px; font-size:10.5px; color:#00dc82; overflow-x:auto; }
