@@ -58,8 +58,34 @@ ${cardCss}
   </section>
 </main>
 
+<!-- Diagram modal - shows the focused table + its neighbors -->
+<div id="diagram-modal" class="modal">
+  <div class="modal-head">
+    <button id="diagram-back" class="btn-back">\u2190 Back to card</button>
+    <div id="diagram-title" class="modal-title"></div>
+  </div>
+  <div id="diagram-canvas" class="modal-canvas">
+    <svg id="diagram-svg"></svg>
+  </div>
+  <div class="modal-hint">Hover any line to see what connects. The highlighted table is the one the card is about.</div>
+</div>
+
 <script>
 const FINDINGS = ${JSON.stringify(findings)};
+const SCHEMA_TABLES = ${JSON.stringify(
+    schema.tables.map((t) => ({
+      name: t.name,
+      cols: t.columns.map((c) => ({ n: c.name, pk: c.isPrimaryKey })),
+    })),
+  )};
+const SCHEMA_FKS = ${JSON.stringify(
+    schema.foreignKeys.map((fk) => ({
+      from: fk.fromTable,
+      fromCol: fk.fromColumn,
+      to: fk.toTable,
+      toCol: fk.toColumn,
+    })),
+  )};
 const PROFILE = ${JSON.stringify(schema.profile)};
 const STORAGE_KEY = 'arc-tables-decisions-' + PROFILE;
 
@@ -153,6 +179,7 @@ function renderCard() {
     '<div class="card-section"><div class="card-label">What\\'s going on</div><div class="card-body">' + escapeHtml(f.plainWhat) + '</div></div>' +
     '<div class="card-section"><div class="card-label">Why it matters</div><div class="card-body">' + escapeHtml(f.plainWhy) + '</div></div>' +
     '<div class="card-section"><div class="card-label">What fixing it looks like</div><div class="card-body">' + escapeHtml(f.plainFix) + '</div></div>' +
+    (f.table ? '<button class="btn-diagram" data-show-diagram="' + escapeHtml(f.table.split(' / ')[0]) + '">\ud83d\uddfa Show me where this lives in the database</button>' : '') +
     (f.fixSql ? '<details class="card-sql"><summary>Show the technical fix (SQL)</summary><pre><code>' + escapeHtml(f.fixSql) + '</code></pre></details>' : '') +
     '<div class="note-row">' +
       '<label class="card-label">Add a note (optional)</label>' +
@@ -186,7 +213,164 @@ function renderCard() {
       setNote(f, i, noteInput.value.trim());
     });
   }
+
+  // Diagram button
+  const diagBtn = stage.querySelector('[data-show-diagram]');
+  if (diagBtn) {
+    diagBtn.addEventListener('click', () => {
+      // Save any in-progress note first so it's there when they come back
+      const ni = document.getElementById('note-input');
+      if (ni) setNote(f, i, ni.value.trim());
+      openDiagram(diagBtn.dataset.showDiagram, f.plainTitle);
+    });
+  }
 }
+
+// --- Focused diagram modal ---
+function openDiagram(centerTable, title) {
+  const modal = document.getElementById('diagram-modal');
+  document.getElementById('diagram-title').textContent = title;
+  modal.classList.add('open');
+  renderFocusedDiagram(centerTable);
+}
+
+function closeDiagram() {
+  document.getElementById('diagram-modal').classList.remove('open');
+}
+
+document.getElementById('diagram-back').addEventListener('click', closeDiagram);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('diagram-modal').classList.contains('open')) {
+    closeDiagram();
+  }
+});
+
+function renderFocusedDiagram(centerName) {
+  const canvas = document.getElementById('diagram-canvas');
+  const svg = document.getElementById('diagram-svg');
+  // Clear previous render
+  [...canvas.querySelectorAll('.mini-card')].forEach((el) => el.remove());
+  svg.innerHTML = '';
+
+  // Find the center table
+  const center = SCHEMA_TABLES.find((t) => t.name === centerName);
+  if (!center) {
+    canvas.innerHTML = '<svg id="diagram-svg"></svg><div class="diagram-empty">Table "' + escapeHtml(centerName) + '" not found in schema.</div>';
+    return;
+  }
+
+  // Find 1-hop neighbors (tables this links to OR tables that link to this)
+  const neighborNames = new Set();
+  const relevantFks = [];
+  SCHEMA_FKS.forEach((fk) => {
+    if (fk.from === centerName) {
+      neighborNames.add(fk.to);
+      relevantFks.push(fk);
+    } else if (fk.to === centerName) {
+      neighborNames.add(fk.from);
+      relevantFks.push(fk);
+    }
+  });
+
+  const neighbors = [...neighborNames].map((n) => SCHEMA_TABLES.find((t) => t.name === n)).filter(Boolean);
+
+  // If no neighbors, show isolated message
+  if (neighbors.length === 0) {
+    placeMiniCard(canvas, center, 600, 280, true);
+    const note = document.createElement('div');
+    note.className = 'diagram-empty';
+    note.innerHTML = '<strong>"' + escapeHtml(centerName) + '" has no connections to other tables.</strong><br><br>It\\'s a standalone table - nothing links into it, and it doesn\\'t link out to anything.';
+    canvas.appendChild(note);
+    return;
+  }
+
+  // Layout: center table in middle, neighbors arranged around it
+  const cx = 600, cy = 280;
+  placeMiniCard(canvas, center, cx, cy, true);
+
+  // Position neighbors in a ring
+  const radius = Math.max(280, 120 + neighbors.length * 14);
+  neighbors.forEach((n, i) => {
+    const angle = (i / neighbors.length) * Math.PI * 2 - Math.PI / 2;
+    const nx = cx + Math.cos(angle) * radius;
+    const ny = cy + Math.sin(angle) * radius;
+    placeMiniCard(canvas, n, nx, ny, false);
+  });
+
+  // Draw connections after layout settles
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const CR = canvas.getBoundingClientRect();
+    relevantFks.forEach((fk, i) => {
+      const fromCard = canvas.querySelector('[data-mini="' + fk.from + '"]');
+      const toCard = canvas.querySelector('[data-mini="' + fk.to + '"]');
+      if (!fromCard || !toCard) return;
+      const fromCol = fromCard.querySelector('[data-col="' + fk.fromCol + '"]');
+      const toCol = toCard.querySelector('[data-col="' + fk.toCol + '"]');
+      const fr = fromCard.getBoundingClientRect();
+      const tr = toCard.getBoundingClientRect();
+      const fromRight = fr.left < tr.left;
+      const fy = fromCol ? fromCol.getBoundingClientRect().top - CR.top + fromCol.getBoundingClientRect().height / 2 : fr.top - CR.top + fr.height / 2;
+      const ty = toCol ? toCol.getBoundingClientRect().top - CR.top + toCol.getBoundingClientRect().height / 2 : tr.top - CR.top + tr.height / 2;
+      const fx = (fromRight ? fr.right : fr.left) - CR.left;
+      const tx = (fromRight ? tr.left : tr.right) - CR.left;
+      const dx = Math.min(Math.abs(tx - fx) * 0.6, 140);
+      const sx = fx < tx ? 1 : -1;
+      const d = 'M' + fx + ',' + fy + ' C' + (fx + sx * dx) + ',' + fy + ' ' + (tx - sx * dx) + ',' + ty + ' ' + tx + ',' + ty;
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      path.setAttribute('class', 'mini-path');
+      path.setAttribute('id', 'mp' + i);
+      path.dataset.label = fk.from + '.' + fk.fromCol + ' \u2192 ' + fk.to + '.' + fk.toCol;
+      svg.appendChild(path);
+
+      // Animated dot
+      const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      dot.setAttribute('r', '3.5');
+      dot.setAttribute('fill', '#00d4ff');
+      dot.setAttribute('filter', 'drop-shadow(0 0 4px #00d4ff)');
+      const dur = (1.8 + i * 0.2).toFixed(2);
+      dot.innerHTML = '<animateMotion dur="' + dur + 's" repeatCount="indefinite"><mpath href="#mp' + i + '"/></animateMotion>';
+      svg.appendChild(dot);
+
+      // Tooltip on hover
+      path.style.pointerEvents = 'stroke';
+      path.addEventListener('mouseenter', (e) => {
+        showDiagTip(path.dataset.label, e.clientX, e.clientY);
+      });
+      path.addEventListener('mousemove', (e) => moveDiagTip(e.clientX, e.clientY));
+      path.addEventListener('mouseleave', hideDiagTip);
+    });
+  }));
+}
+
+function placeMiniCard(canvas, table, x, y, isCenter) {
+  const card = document.createElement('div');
+  card.className = 'mini-card' + (isCenter ? ' is-center' : '');
+  card.dataset.mini = table.name;
+  card.style.left = (x - 90) + 'px';
+  card.style.top = (y - 60) + 'px';
+  const cols = table.cols.slice(0, 8).map((c) => {
+    const cls = 'mc-col' + (c.pk ? ' is-pk' : '');
+    return '<div class="' + cls + '" data-col="' + escapeHtml(c.n) + '"><span class="mc-dot"></span>' + escapeHtml(c.n) + '</div>';
+  }).join('');
+  const more = table.cols.length > 8 ? '<div class="mc-more">+ ' + (table.cols.length - 8) + ' more</div>' : '';
+  card.innerHTML = '<div class="mc-head">' + escapeHtml(table.name) + '</div>' + '<div class="mc-cols">' + cols + more + '</div>';
+  canvas.appendChild(card);
+}
+
+let diagTip;
+function showDiagTip(text, x, y) {
+  if (!diagTip) {
+    diagTip = document.createElement('div');
+    diagTip.className = 'diag-tip';
+    document.body.appendChild(diagTip);
+  }
+  diagTip.textContent = text;
+  diagTip.style.display = 'block';
+  moveDiagTip(x, y);
+}
+function moveDiagTip(x, y) { if (diagTip) { diagTip.style.left = (x + 14) + 'px'; diagTip.style.top = (y - 10) + 'px'; } }
+function hideDiagTip() { if (diagTip) diagTip.style.display = 'none'; }
 
 // --- List view ---
 function renderList() {
@@ -497,6 +681,101 @@ main { max-width:1100px; margin:0 auto; padding:0 28px 80px; position:relative; 
   .sum-stats { grid-template-columns:repeat(2, 1fr); }
   .sum-grid { grid-template-columns:1fr; }
   .actions { flex-direction:column; }
+}
+
+/* Diagram button on card */
+.btn-diagram {
+  display:block; width:100%; margin:18px 0 0;
+  background:rgba(0,212,255,0.07); color:#00d4ff;
+  border:1px solid rgba(0,212,255,0.3); padding:12px 18px;
+  border-radius:10px; font-family:system-ui, sans-serif; font-size:13px;
+  cursor:pointer; transition:all .15s; font-weight:500; letter-spacing:.2px;
+}
+.btn-diagram:hover {
+  background:rgba(0,212,255,0.15); border-color:rgba(0,212,255,0.6);
+  box-shadow:0 0 18px rgba(0,212,255,0.18);
+}
+
+/* Modal */
+.modal {
+  position:fixed; inset:0; z-index:500;
+  background:rgba(6,6,15,0.97); backdrop-filter:blur(10px);
+  display:none; flex-direction:column;
+}
+.modal.open { display:flex; }
+.modal-head {
+  position:sticky; top:0; padding:18px 28px; display:flex; align-items:center; gap:20px;
+  border-bottom:1px solid rgba(0,200,255,0.12); background:rgba(6,6,15,0.95);
+}
+.btn-back {
+  background:rgba(0,212,255,0.08); color:#00d4ff;
+  border:1px solid rgba(0,212,255,0.3); padding:8px 16px;
+  border-radius:8px; font-family:system-ui, sans-serif; font-size:13px;
+  cursor:pointer; transition:all .15s; font-weight:500;
+}
+.btn-back:hover { background:rgba(0,212,255,0.18); border-color:rgba(0,212,255,0.6); }
+.modal-title {
+  font-family:system-ui, sans-serif; font-size:14px; color:rgba(220,230,255,0.75);
+  flex:1; font-weight:500;
+}
+
+.modal-canvas {
+  flex:1; position:relative; overflow:auto; padding:40px;
+}
+.modal-canvas svg {
+  position:absolute; inset:0; width:100%; height:100%;
+  pointer-events:none; z-index:1; overflow:visible;
+}
+
+.mini-card {
+  position:absolute; min-width:180px; z-index:2;
+  background:rgba(10,14,30,0.95); border:1px solid rgba(255,255,255,0.1);
+  border-radius:10px; padding:0; transition:transform .15s, box-shadow .15s;
+}
+.mini-card.is-center {
+  border-color:rgba(0,220,130,0.5);
+  box-shadow:0 0 30px rgba(0,220,130,0.25), inset 0 1px 0 rgba(255,255,255,0.05);
+  z-index:3;
+}
+.mini-card .mc-head {
+  padding:10px 14px; font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+  font-weight:700; color:#00d4ff; border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.mini-card.is-center .mc-head { color:#00dc82; }
+.mini-card .mc-cols { padding:6px 0 8px; }
+.mini-card .mc-col {
+  padding:3px 14px; font-size:10.5px; color:rgba(180,195,255,0.55);
+  display:flex; align-items:center; gap:7px; font-family:'SF Mono', monospace;
+}
+.mini-card .mc-col.is-pk { color:rgba(160,160,255,0.7); }
+.mini-card .mc-dot { width:4px; height:4px; border-radius:50%; background:rgba(255,255,255,0.15); flex-shrink:0; }
+.mini-card .mc-col.is-pk .mc-dot { background:rgba(160,160,255,0.5); }
+.mini-card .mc-more {
+  padding:3px 14px; font-size:9.5px; color:rgba(255,255,255,0.3); font-style:italic;
+}
+
+.mini-path {
+  fill:none; stroke:#00d4ff; stroke-width:1.5; stroke-dasharray:7 5;
+  opacity:.55; filter:drop-shadow(0 0 2px rgba(0,212,255,0.4));
+  transition:opacity .15s, stroke-width .15s;
+}
+.mini-path:hover { opacity:1; stroke-width:2.5; }
+
+.modal-hint {
+  padding:12px 28px; font-size:11px; color:rgba(255,255,255,0.35);
+  font-family:system-ui, sans-serif; text-align:center;
+  border-top:1px solid rgba(255,255,255,0.05);
+}
+.diagram-empty {
+  position:absolute; top:50%; left:50%; transform:translate(-50%, calc(-50% + 100px));
+  text-align:center; color:rgba(220,230,255,0.55); font-family:system-ui, sans-serif;
+  font-size:14px; line-height:1.6; max-width:480px;
+}
+.diag-tip {
+  position:fixed; background:rgba(9,13,28,0.97); border:1px solid rgba(0,200,255,0.3);
+  border-radius:8px; padding:7px 12px; font-size:11px; color:#00d4ff;
+  pointer-events:none; z-index:600; display:none; max-width:300px;
+  font-family:'SF Mono', monospace;
 }
 `.trim();
 
