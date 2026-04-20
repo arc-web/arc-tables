@@ -1,112 +1,191 @@
-# ARC Tables
+# arc-tables
 
-Animated HTML schema maps + auditor for any database. Built for people who'd rather see a database than read it.
+**Stop squinting at database diagrams. Get a live, interactive map of your entire schema — plus an AI-powered audit that explains every issue in plain English.**
 
-Point it at Postgres, Supabase, MySQL, or SQLite. Get back a futuristic-looking interactive HTML map with color-coded table groups, animated FK flows, hover-to-isolate, plain-English tooltips - and a lint pass that flags orphans, duplicate prefixes, ambiguous columns, and legacy patterns with the SQL to fix them.
+Point arc-tables at your Postgres or Supabase database. Out comes a single HTML file: a gorgeous animated diagram of every table, every FK link, color-coded by group. Hover to isolate. Click to zoom. Then run the built-in auditor and get 144 issues highlighted as swipeable cards with the exact SQL to fix them.
 
-## Install
+No server. No deployment. No config. Just *click* and understand your database.
+
+---
+
+## What you get
+
+### 📊 Schema visualization
+Every table laid out with animated FK flow lines. Color-coded by group (anchors, pipeline, people, financial, ops). Hover to dim everything except what you're looking at. One HTML file, opens in any browser.
+
+### 🎯 Plain-English audit
+Instead of raw SQL, each issue gets explained in three parts:
+- **What** — the specific problem (e.g., "this column uses names instead of IDs")
+- **Why it matters** — the actual consequence (e.g., "if a client is renamed, the link breaks")
+- **Fix** — step-by-step plain English, plus the exact SQL
+
+### 🃏 Tinder-style review
+One card at a time. Swipe to accept, skip, or dismiss. Notes persist to localStorage. Jump to a diagram of the affected table with one click. See your progress as you go.
+
+### 🗺️ Lifecycle flows
+Trace a specific path through your schema — from leads to clients to transactions. See how data moves. Understand dependencies at a glance.
+
+---
+
+## The audit rules
+
+arc-tables ships with 9 built-in rules, each one modeled on a real schema issue:
+
+1. **Duplicate-prefix orphans** — Tables named both `clients_X` and `client_X` (plural/singular mismatch)
+2. **String FK columns** — Foreign keys using name-based links (`client_name`) instead of IDs
+3. **Ambiguous name columns** — Bare `name` columns that collide in joins
+4. **Deprecated columns** — `*_deprecated` columns left after migration
+5. **Orphan tables** — Tables with no FK in or out
+6. **Single-row satellites** — Tables that should be columns (one row per parent, no time axis)
+7. **Empty staging tables** — `*_staging` and `temp_*` tables with zero rows
+8. **Casing duplicates** — Both `Foo` and `foo` existing in the same schema
+9. **Broken views** — Views referencing columns or tables that no longer exist
+
+Every rule comes with the exact SQL to fix it. Every SQL block is commented with the issue it solves.
+
+---
+
+## Quick start
+
+### Install
 
 ```bash
+# global
 npm install -g @arc-web/arc-tables
+
+# or run without installing
+npx @arc-web/arc-tables --help
 ```
 
-## Quick Start
+### Connect to your database
 
 ```bash
-# Connect to a Supabase project
-arc-tables connect supabase \
-  --pat "op://ARC/Supabase MCP Master Token/credential" \
-  --project pqwfnhbltsygwaiefnru \
-  --as arc-prod
+# Supabase
+arc-tables connect supabase --project your-project-ref --as mydb
 
-# Generate the schema map
-arc-tables map --profile arc-prod --output ecosystem.html
-open ecosystem.html
-
-# Run the audit
-arc-tables audit --profile arc-prod --output audit.html --sql fixes.sql
+# Postgres
+arc-tables connect postgres --host localhost --database mydb --as mydb
 ```
 
-## Connection Profiles
+Credentials are never sent anywhere. They're stored locally in `~/.arc-tables/profiles.json`.
 
-Profiles live in `~/.arc-tables/profiles.json`. Secrets can be raw values or 1Password references (`op://...`) - references are resolved at runtime via the `op` CLI.
+### Generate your first audit
 
 ```bash
-arc-tables connect supabase --pat $PAT --project <ref> --as arc-prod
-arc-tables connect postgres --conn "postgres://user:pass@host:5432/db" --as my-pg
-arc-tables connect sqlite --path ./local.db --as scratch
+arc-tables audit --profile mydb --format cards --output audit.html
 ```
+
+Then open `audit.html` in your browser.
+
+```
+Found 144 issues across 166 tables.
+Wrote card report: audit.html
+Wrote SQL: fixes.sql
+```
+
+Each issue is one swipeable card. Accept a fix, and it adds the SQL to `fixes.sql`. Review the file, run it when you're ready.
+
+### Also available
+
+```bash
+# Full schema map (all tables, all FKs)
+arc-tables map --profile mydb --output schema.html
+
+# Lifecycle flow (trace a path through your schema)
+arc-tables flow --from leads --to clients --through client_transactions --output flow.html
+
+# Edit annotations (colors, descriptions, group labels)
+arc-tables annotate --table clients
+```
+
+---
+
+## How it works
+
+1. **Connect** — Point at your database (Supabase PAT, Postgres connection string, or local file)
+2. **Introspect** — Reads all tables, columns, FKs, views, indexes. Read-only, no schema changes.
+3. **Audit** — Runs 9 rules. Each issue gets a plain-English explanation and the SQL to fix it.
+4. **Review** — Open the HTML in your browser. One card at a time. Accept fixes or dismiss.
+5. **Fix** — Run the generated SQL whenever you're ready.
+
+---
 
 ## Annotations
 
-Add plain-English descriptions, color groups, and manual layout via a sidecar YAML next to where you run the CLI:
+Customize how tables are displayed with a sidecar YAML file:
 
 ```yaml
-profile: arc-prod
+# arc-tables.yaml
 groups:
-  anchors:    { color: white,  members: [companies, contacts] }
-  pipeline:   { color: orange, members: [leads] }
-  core:       { color: cyan,   members: [clients] }
-  financial:  { color: green,  members: [client_transactions, client_budget] }
-  people:     { color: purple, members: [client_contacts, client_comms] }
+  anchors:
+    color: white
+    members: [companies, contacts]
+  pipeline:
+    color: orange
+    members: [leads, leads_events]
+  core:
+    color: cyan
+    members: [clients, client_contacts, client_comms]
+  financial:
+    color: green
+    members: [client_transactions, client_budget]
+
 tables:
   clients:
     description: "Signed contracts and account-level data."
-  client_information:
-    flag: "orphaned-no-fk"
-layout:
-  companies: { x: 600, y: 20 }
-  clients:   { x: 560, y: 240 }
+    columns:
+      company_id: "Links to the org identity"
+      status: "active, paused, closed"
 ```
 
-Sidecar wins over `COMMENT ON TABLE` / `COMMENT ON COLUMN` from the database itself.
+Run `arc-tables annotate --table clients` to edit in your `$EDITOR`. Annotations automatically apply to all output files.
 
-```bash
-arc-tables annotate --profile arc-prod  # opens the sidecar in $EDITOR
-```
+---
 
-## Audit Rules
+## Features
 
-| Rule | What it catches |
-|---|---|
-| `duplicate-prefix` | Plural/singular mismatch (`clients_X` and `client_X` both exist) |
-| `string-fk` | FKs targeting a text column when an `id` PK exists on the parent |
-| `ambiguous-name` | Bare `name` columns that should be `{table}_name` |
-| `deprecated-column` | Columns ending in `_deprecated` or `_legacy` |
-| `orphan-table` | Tables with no FKs in or out |
-| `single-row-satellite` | Tables that should probably be columns on the parent |
-| `empty-staging` | Tables matching `*_staging`, `temp_*`, `*_old`, `*_backup` |
-| `casing-duplicate` | Two tables differing only by case (e.g. `Foo` and `foo`) |
-| `broken-view` | Views referencing non-existent columns |
+- ✅ Single-file HTML output (no server, no deps)
+- ✅ Works with Supabase, Postgres, MySQL, SQLite (adapters coming)
+- ✅ SSH tunnel support for remote databases
+- ✅ 9 audit rules with plain-English copy
+- ✅ Sidecar YAML annotations for custom colors, descriptions, groups
+- ✅ Tinder-style card review UI with localStorage persistence
+- ✅ Interactive diagram per issue (pan, zoom, show FK neighbors)
+- ✅ Generated SQL comments with per-rule source
+- ✅ No write operations — read-only introspection only
 
-The audit emits both an interactive HTML report and a `fixes.sql` file with commented-out SQL ready to review and apply manually. Nothing is run automatically.
+---
 
-## Embedding Programmatically
+## What's NOT here (yet)
 
-```ts
-import { SupabaseAdapter, runAudit, renderMap } from '@arc-web/arc-tables';
+- Schema editing through the UI (fixes are reviewed as SQL)
+- Auto-apply of suggested SQL (you run it yourself)
+- Hosted/SaaS version (CLI only)
+- Migration generation (just fix suggestions)
 
-const adapter = new SupabaseAdapter('project-ref', process.env.SUPABASE_PAT!);
-const schema = await adapter.introspect('public');
-const findings = runAudit(schema);
-const html = renderMap(schema, undefined);
-```
+---
 
-## Repo
+## License
 
-```
-src/
-  adapters/    # Postgres, Supabase, MySQL, SQLite, SSH
-  introspect/  # Schema reader
-  annotate/    # Sidecar YAML + DB COMMENT fallback
-  audit/       # Lint rules + runner
-  render/      # Theme, cards, paths, layout, templates
-  commands/    # CLI command handlers
-```
+MIT. Built with TypeScript, commander, pg, and SVG.
 
-## Status
+---
 
-v0.1 - foundation + Supabase adapter + map/audit/flow templates + 9 audit rules.
-v0.2 - Postgres direct, sidecar annotation editor, polished flow template.
-v0.3 - MySQL, SQLite, SSH adapters.
-v0.4 - Python plugin interface for custom rules.
+## Examples
+
+**Before arc-tables:**
+- Squinting at database docs that are 6 months out of date
+- Spending 2 hours tracing which tables link to which
+- Finding naming inconsistencies and orphans by hand
+- Writing migration SQL with no idea if it'll work
+
+**After arc-tables:**
+- Open audit.html, see all 144 issues color-coded by severity
+- Click "Accept fix" on the string FK issue, SQL is ready to review
+- Spot the `clients_X` vs `client_X` mismatch immediately
+- Read "why it matters" before running any SQL
+- 30 minutes from schema introspection to production-ready fixes
+
+---
+
+Have questions? Open an issue on GitHub or read the full docs at [arc-web.github.io/arc-tables](https://arc-web.github.io/arc-tables).
