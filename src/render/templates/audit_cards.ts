@@ -64,10 +64,12 @@ ${cardCss}
     <button id="diagram-back" class="btn-back">\u2190 Back to card</button>
     <div id="diagram-title" class="modal-title"></div>
   </div>
-  <div id="diagram-canvas" class="modal-canvas">
-    <svg id="diagram-svg"></svg>
+  <div id="diagram-viewport" class="modal-viewport">
+    <div id="diagram-canvas" class="modal-canvas">
+      <svg id="diagram-svg"></svg>
+    </div>
   </div>
-  <div class="modal-hint">Hover any line to see what connects. The highlighted table is the one the card is about.</div>
+  <div class="modal-hint">Click + drag to pan \u00B7 Ctrl + scroll to zoom \u00B7 Hover any line for details \u00B7 Press R to reset view</div>
 </div>
 
 <script>
@@ -229,16 +231,101 @@ function renderCard() {
 }
 
 // --- Focused diagram modal ---
+// Pan/zoom state for the diagram canvas
+let viewState = { x: 0, y: 0, scale: 1 };
+
+function applyView() {
+  const canvas = document.getElementById('diagram-canvas');
+  if (canvas) canvas.style.transform = 'translate(' + viewState.x + 'px, ' + viewState.y + 'px) scale(' + viewState.scale + ')';
+}
+
+function resetView() {
+  const viewport = document.getElementById('diagram-viewport');
+  const vw = viewport ? viewport.clientWidth : 1200;
+  const vh = viewport ? viewport.clientHeight : 600;
+  // Fit-to-view: scale so the 1400x700 canvas comfortably fits in the viewport, then center it
+  const scale = Math.min(vw / 1500, vh / 800, 1);
+  viewState = {
+    x: (vw - 1400 * scale) / 2,
+    y: (vh - 700 * scale) / 2,
+    scale,
+  };
+  applyView();
+}
+
 function openDiagram(centerTable, title) {
   const modal = document.getElementById('diagram-modal');
   document.getElementById('diagram-title').textContent = title;
   modal.classList.add('open');
+  resetView();
   renderFocusedDiagram(centerTable);
 }
 
 function closeDiagram() {
   document.getElementById('diagram-modal').classList.remove('open');
 }
+
+// --- Pan/zoom on the viewport ---
+(function setupPanZoom() {
+  const viewport = document.getElementById('diagram-viewport');
+  if (!viewport) return;
+  let dragging = false;
+  let lastX = 0, lastY = 0;
+
+  viewport.addEventListener('mousedown', (e) => {
+    // Only start drag if not clicking on a path (let path tooltips work)
+    if (e.target.tagName === 'path' || e.target.closest('button, a, input, textarea')) return;
+    dragging = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    viewport.style.cursor = 'grabbing';
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - lastX;
+    const dy = e.clientY - lastY;
+    lastX = e.clientX;
+    lastY = e.clientY;
+    viewState.x += dx;
+    viewState.y += dy;
+    applyView();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (dragging) {
+      dragging = false;
+      viewport.style.cursor = 'grab';
+    }
+  });
+
+  viewport.addEventListener('wheel', (e) => {
+    if (!e.ctrlKey && !e.metaKey) return; // require ctrl/cmd for zoom
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const mouseY = e.clientY - rect.top;
+    // Zoom factor (negative deltaY = zoom in)
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const newScale = Math.max(0.2, Math.min(4, viewState.scale * factor));
+    // Anchor zoom to cursor: world point under cursor stays under cursor
+    const wx = (mouseX - viewState.x) / viewState.scale;
+    const wy = (mouseY - viewState.y) / viewState.scale;
+    viewState.scale = newScale;
+    viewState.x = mouseX - wx * newScale;
+    viewState.y = mouseY - wy * newScale;
+    applyView();
+  }, { passive: false });
+
+  // R key resets view
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') return;
+    if ((e.key === 'r' || e.key === 'R') && document.getElementById('diagram-modal').classList.contains('open')) {
+      resetView();
+    }
+  });
+})();
 
 document.getElementById('diagram-back').addEventListener('click', closeDiagram);
 document.addEventListener('keydown', (e) => {
@@ -299,22 +386,22 @@ function renderFocusedDiagram(centerName) {
     placeMiniCard(canvas, n, nx, ny, false);
   });
 
-  // Draw connections after layout settles
+  // Draw connections after layout settles. Use canvas-local coords (offsetLeft/offsetTop)
+  // so paths stay correct under transform-based pan/zoom.
   requestAnimationFrame(() => requestAnimationFrame(() => {
-    const CR = canvas.getBoundingClientRect();
     relevantFks.forEach((fk, i) => {
       const fromCard = canvas.querySelector('[data-mini="' + fk.from + '"]');
       const toCard = canvas.querySelector('[data-mini="' + fk.to + '"]');
       if (!fromCard || !toCard) return;
       const fromCol = fromCard.querySelector('[data-col="' + fk.fromCol + '"]');
       const toCol = toCard.querySelector('[data-col="' + fk.toCol + '"]');
-      const fr = fromCard.getBoundingClientRect();
-      const tr = toCard.getBoundingClientRect();
-      const fromRight = fr.left < tr.left;
-      const fy = fromCol ? fromCol.getBoundingClientRect().top - CR.top + fromCol.getBoundingClientRect().height / 2 : fr.top - CR.top + fr.height / 2;
-      const ty = toCol ? toCol.getBoundingClientRect().top - CR.top + toCol.getBoundingClientRect().height / 2 : tr.top - CR.top + tr.height / 2;
-      const fx = (fromRight ? fr.right : fr.left) - CR.left;
-      const tx = (fromRight ? tr.left : tr.right) - CR.left;
+      const fLeft = fromCard.offsetLeft, fTop = fromCard.offsetTop, fW = fromCard.offsetWidth, fH = fromCard.offsetHeight;
+      const tLeft = toCard.offsetLeft, tTop = toCard.offsetTop, tW = toCard.offsetWidth, tH = toCard.offsetHeight;
+      const fromRight = fLeft < tLeft;
+      const fy = fromCol ? fTop + fromCol.offsetTop + fromCol.offsetHeight / 2 : fTop + fH / 2;
+      const ty = toCol ? tTop + toCol.offsetTop + toCol.offsetHeight / 2 : tTop + tH / 2;
+      const fx = fromRight ? fLeft + fW : fLeft;
+      const tx = fromRight ? tLeft : tLeft + tW;
       const dx = Math.min(Math.abs(tx - fx) * 0.6, 140);
       const sx = fx < tx ? 1 : -1;
       const d = 'M' + fx + ',' + fy + ' C' + (fx + sx * dx) + ',' + fy + ' ' + (tx - sx * dx) + ',' + ty + ' ' + tx + ',' + ty;
@@ -727,8 +814,17 @@ main { max-width:1100px; margin:0 auto; padding:0 28px 80px; position:relative; 
   flex:1; font-weight:500;
 }
 
+.modal-viewport {
+  flex:1; position:relative; overflow:hidden; cursor:grab;
+  background-image:radial-gradient(circle, rgba(0,200,255,0.06) 1px, transparent 1px);
+  background-size:32px 32px;
+}
+.modal-viewport:active { cursor:grabbing; }
 .modal-canvas {
-  flex:1; position:relative; overflow:auto; padding:40px;
+  position:absolute; top:0; left:0;
+  width:1400px; height:700px;
+  transform-origin:0 0;
+  will-change:transform;
 }
 .modal-canvas svg {
   position:absolute; inset:0; width:100%; height:100%;
