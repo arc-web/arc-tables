@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARC CRM Schema</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #06060f;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    color: #e0e8ff;
+  }
+
+  /* Dot grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: radial-gradient(circle, rgba(0,200,255,0.08) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  h1 {
+    text-align: center;
+    padding: 28px 0 8px;
+    font-size: 13px;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: rgba(0,200,255,0.5);
+    position: relative;
+    z-index: 10;
+  }
+
+  #subtitle {
+    text-align: center;
+    font-size: 11px;
+    color: rgba(255,255,255,0.2);
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 10;
+  }
+
+  #canvas {
+    position: relative;
+    width: 1400px;
+    height: 860px;
+    margin: 0 auto;
+  }
+
+  svg#connections {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+    overflow: visible;
+  }
+
+  .path-clean {
+    fill: none;
+    stroke: #00d4ff;
+    stroke-width: 2;
+    stroke-dasharray: 8 5;
+    opacity: 0.7;
+    filter: drop-shadow(0 0 3px #00d4ff88);
+    transition: opacity 0.2s, stroke-width 0.2s;
+  }
+
+  .path-legacy {
+    fill: none;
+    stroke: #ffaa00;
+    stroke-width: 2;
+    stroke-dasharray: 6 4;
+    opacity: 0.6;
+    filter: drop-shadow(0 0 3px #ffaa0088);
+    transition: opacity 0.2s, stroke-width 0.2s;
+  }
+
+  .path-clean.active { opacity: 1; stroke-width: 3; }
+  .path-legacy.active { opacity: 1; stroke-width: 3; }
+  .path-clean.dimmed, .path-legacy.dimmed { opacity: 0.08; }
+
+  /* Animated flow dots */
+  .flow-dot {
+    r: 3;
+    fill: #00d4ff;
+    filter: drop-shadow(0 0 4px #00d4ff);
+  }
+  .flow-dot-legacy {
+    r: 3;
+    fill: #ffaa00;
+    filter: drop-shadow(0 0 4px #ffaa00);
+  }
+
+  /* Table cards */
+  .table-card {
+    position: absolute;
+    background: rgba(10, 14, 30, 0.92);
+    border-radius: 12px;
+    border: 1px solid rgba(0,200,255,0.25);
+    box-shadow: 0 0 20px rgba(0,200,255,0.07), inset 0 1px 0 rgba(255,255,255,0.04);
+    backdrop-filter: blur(8px);
+    z-index: 2;
+    min-width: 200px;
+    transition: box-shadow 0.2s, border-color 0.2s, transform 0.2s;
+    cursor: default;
+  }
+
+  .table-card:hover {
+    border-color: rgba(0,200,255,0.6);
+    box-shadow: 0 0 32px rgba(0,200,255,0.18), inset 0 1px 0 rgba(255,255,255,0.06);
+    transform: translateY(-2px);
+  }
+
+  .table-card.legacy {
+    border-color: rgba(255,160,0,0.3);
+    box-shadow: 0 0 20px rgba(255,160,0,0.07), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  .table-card.legacy:hover {
+    border-color: rgba(255,160,0,0.7);
+    box-shadow: 0 0 32px rgba(255,160,0,0.2);
+  }
+
+  .table-card.dimmed {
+    opacity: 0.25;
+  }
+
+  .card-header {
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .table-name {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #00d4ff;
+  }
+
+  .table-card.legacy .table-name { color: #ffaa00; }
+
+  .table-badge {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: rgba(255,255,255,0.25);
+    margin-top: 2px;
+  }
+
+  .table-card.legacy .table-badge { color: rgba(255,170,0,0.45); }
+
+  .col-list {
+    padding: 8px 0 10px;
+  }
+
+  .col-row {
+    padding: 4px 14px;
+    font-size: 11px;
+    color: rgba(200,210,255,0.65);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: color 0.15s, background 0.15s;
+    border-radius: 4px;
+    margin: 1px 6px;
+    position: relative;
+  }
+
+  .col-row.is-fk-source {
+    color: rgba(0,210,255,0.9);
+  }
+
+  .col-row.is-legacy-fk {
+    color: rgba(255,170,0,0.9);
+  }
+
+  .col-row.is-pk {
+    color: rgba(180,180,255,0.7);
+  }
+
+  .col-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.12);
+    flex-shrink: 0;
+  }
+
+  .col-row.is-pk .col-dot { background: rgba(160,160,255,0.5); }
+  .col-row.is-fk-source .col-dot { background: #00d4ff; box-shadow: 0 0 4px #00d4ff; }
+  .col-row.is-legacy-fk .col-dot { background: #ffaa00; box-shadow: 0 0 4px #ffaa00; }
+
+  /* Legend */
+  #legend {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: rgba(10,14,30,0.92);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    padding: 14px 18px;
+    z-index: 100;
+    font-size: 11px;
+  }
+
+  .legend-title {
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 2px;
+    font-size: 9px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: rgba(200,210,255,0.6);
+    margin-bottom: 6px;
+  }
+
+  .legend-line {
+    width: 36px; height: 2px;
+    border-radius: 1px;
+  }
+
+  .legend-line.clean {
+    background: #00d4ff;
+    box-shadow: 0 0 4px #00d4ff;
+  }
+
+  .legend-line.legacy {
+    background: #ffaa00;
+    box-shadow: 0 0 4px #ffaa00;
+  }
+
+  /* Tooltip */
+  #tooltip {
+    position: fixed;
+    background: rgba(10,14,30,0.96);
+    border: 1px solid rgba(0,200,255,0.3);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 11px;
+    color: #00d4ff;
+    pointer-events: none;
+    z-index: 200;
+    display: none;
+    max-width: 280px;
+  }
+
+  /* Scanline shimmer */
+  @keyframes scanline {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(200vh); }
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(transparent, rgba(0,200,255,0.04), transparent);
+    animation: scanline 6s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+  }
+</style>
+</head>
+<body>
+
+<h1>ARC CRM — Schema Map</h1>
+<div id="subtitle">table relationships &amp; foreign key connections</div>
+
+<div id="canvas">
+  <svg id="connections"></svg>
+</div>
+
+<div id="legend">
+  <div class="legend-title">Legend</div>
+  <div class="legend-item">
+    <div class="legend-line clean"></div>
+    <span>Clean FK (post-migration)</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-line legacy"></div>
+    <span>Legacy FK (needs migration)</span>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const TABLES = [
+  {
+    id: 'companies',
+    label: 'companies',
+    badge: '129 rows · master org list',
+    x: 540, y: 20,
+    columns: [
+      { name: 'id', type: 'pk' },
+      { name: 'name', type: 'normal' },
+      { name: 'website', type: 'normal' },
+      { name: 'company_type', type: 'normal' },
+      { name: 'created_at', type: 'normal' },
+    ]
+  },
+  {
+    id: 'clients',
+    label: 'clients',
+    badge: '126 rows · contracts & accounts',
+    x: 120, y: 280,
+    columns: [
+      { name: 'id', type: 'pk' },
+      { name: 'company_id', type: 'fk' },
+      { name: 'status_crm_ghl', type: 'normal' },
+      { name: 'google_ads_account_id', type: 'normal' },
+      { name: 'facebook_ads_account_id', type: 'normal' },
+      { name: 'discord_channel_id', type: 'normal' },
+      { name: 'slack_channel_id', type: 'normal' },
+      { name: 'login_customer_id', type: 'normal' },
+      { name: 'qb_customer_id', type: 'normal' },
+      { name: 'plane_project_id', type: 'normal' },
+    ]
+  },
+  {
+    id: 'contacts',
+    label: 'contacts',
+    badge: '72 rows · people',
+    x: 880, y: 280,
+    columns: [
+      { name: 'id', type: 'pk' },
+      { name: 'name', type: 'normal' },
+      { name: 'company_id', type: 'fk' },
+      { name: 'email_primary', type: 'normal' },
+      { name: 'phone', type: 'normal' },
+    ]
+  },
+  {
+    id: 'client_contacts',
+    label: 'client_contacts',
+    badge: '35 rows · join table',
+    x: 490, y: 500,
+    columns: [
+      { name: 'client_id', type: 'fk' },
+      { name: 'contact_id', type: 'fk' },
+      { name: 'role', type: 'normal' },
+      { name: 'assigned_at', type: 'normal' },
+    ]
+  },
+  {
+    id: 'client_information',
+    label: 'client_information',
+    badge: '⚠ legacy FKs on name',
+    x: 60, y: 580,
+    legacy: true,
+    columns: [
+      { name: 'id', type: 'pk' },
+      { name: 'client_name', type: 'fk-legacy' },
+      { name: 'client_id', type: 'fk' },
+    ]
+  },
+  {
+    id: 'clients_comms',
+    label: 'clients_comms',
+    badge: '⚠ legacy FK on name',
+    x: 970, y: 580,
+    legacy: true,
+    columns: [
+      { name: 'id', type: 'pk' },
+      { name: 'client_name', type: 'fk-legacy' },
+      { name: 'client_id', type: 'fk' },
+    ]
+  },
+];
+
+const FKS = [
+  { from: 'clients', fromCol: 'company_id', to: 'companies', toCol: 'id', type: 'clean', label: 'clients link to their org' },
+  { from: 'contacts', fromCol: 'company_id', to: 'companies', toCol: 'id', type: 'clean', label: 'contacts link to their org' },
+  { from: 'client_contacts', fromCol: 'client_id', to: 'clients', toCol: 'id', type: 'clean', label: 'join: which client' },
+  { from: 'client_contacts', fromCol: 'contact_id', to: 'contacts', toCol: 'id', type: 'clean', label: 'join: which contact' },
+  { from: 'client_information', fromCol: 'client_name', to: 'clients', toCol: 'name', type: 'legacy', label: 'LEGACY: linked by name string, not id' },
+  { from: 'client_information', fromCol: 'client_id', to: 'clients', toCol: 'id', type: 'clean', label: 'newer: linked by id' },
+  { from: 'clients_comms', fromCol: 'client_name', to: 'clients', toCol: 'name', type: 'legacy', label: 'LEGACY: linked by name string, not id' },
+  { from: 'clients_comms', fromCol: 'client_id', to: 'clients', toCol: 'id', type: 'clean', label: 'newer: linked by id' },
+];
+
+// Render cards
+const canvas = document.getElementById('canvas');
+const tableEls = {};
+
+TABLES.forEach(t => {
+  const card = document.createElement('div');
+  card.className = 'table-card' + (t.legacy ? ' legacy' : '');
+  card.id = 'card-' + t.id;
+  card.style.left = t.x + 'px';
+  card.style.top = t.y + 'px';
+
+  const colsHtml = t.columns.map(c => {
+    let cls = 'col-row';
+    if (c.type === 'pk') cls += ' is-pk';
+    else if (c.type === 'fk') cls += ' is-fk-source';
+    else if (c.type === 'fk-legacy') cls += ' is-legacy-fk';
+    return `<div class="${cls}" data-table="${t.id}" data-col="${c.name}">
+      <span class="col-dot"></span>${c.name}
+    </div>`;
+  }).join('');
+
+  card.innerHTML = `
+    <div class="card-header">
+      <div class="table-name">${t.label}</div>
+      <div class="table-badge">${t.badge}</div>
+    </div>
+    <div class="col-list">${colsHtml}</div>
+  `;
+  canvas.appendChild(card);
+  tableEls[t.id] = card;
+});
+
+// Wait for layout then draw SVG connections
+requestAnimationFrame(() => requestAnimationFrame(() => {
+  const svg = document.getElementById('connections');
+  const canvasRect = canvas.getBoundingClientRect();
+
+  function getColAnchor(tableId, colName) {
+    const card = tableEls[tableId];
+    const colEl = card.querySelector(`[data-col="${colName}"]`);
+    if (!colEl) return null;
+    const cardRect = card.getBoundingClientRect();
+    const colRect = colEl.getBoundingClientRect();
+    const relX = cardRect.left - canvasRect.left;
+    const relY = colRect.top - canvasRect.top + colRect.height / 2;
+    return {
+      left:  { x: relX, y: relY },
+      right: { x: relX + cardRect.width, y: relY },
+      cardLeft: relX,
+      cardRight: relX + cardRect.width,
+    };
+  }
+
+  function cubicBezier(x1,y1,x2,y2) {
+    const dx = Math.abs(x2 - x1) * 0.55;
+    return `M${x1},${y1} C${x1+dx},${y1} ${x2-dx},${y2} ${x2},${y2}`;
+  }
+
+  const paths = [];
+
+  FKS.forEach((fk, i) => {
+    const fromA = getColAnchor(fk.from, fk.fromCol);
+    const toA   = getColAnchor(fk.to, fk.toCol);
+    if (!fromA || !toA) return;
+
+    // Pick exit/entry side based on relative position
+    const fromRight = fromA.cardRight < toA.cardLeft + 40;
+    const fromX = fromRight ? fromA.right.x : fromA.left.x;
+    const fromY = fromA.right.y;
+    const toRight  = toA.cardLeft > fromA.cardRight - 40;
+    const toX = toRight ? toA.left.x : toA.right.x;
+    const toY   = toA.right.y;
+
+    const d = cubicBezier(fromX, fromY, toX, toY);
+    const cls = fk.type === 'clean' ? 'path-clean' : 'path-legacy';
+    const dotCls = fk.type === 'clean' ? 'flow-dot' : 'flow-dot-legacy';
+
+    const pathId = `path-${i}`;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', d);
+    path.setAttribute('class', cls);
+    path.setAttribute('id', pathId);
+    path.dataset.from = fk.from;
+    path.dataset.to = fk.to;
+    path.dataset.label = fk.label;
+    svg.appendChild(path);
+
+    // Animated dot along path
+    const pathLen = path.getTotalLength ? path.getTotalLength() : 200;
+    const animate = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    animate.setAttribute('class', dotCls);
+    const dur = (1.5 + i * 0.37).toFixed(2);
+    animate.innerHTML = `
+      <animateMotion dur="${dur}s" repeatCount="indefinite" rotate="auto">
+        <mpath href="#${pathId}"/>
+      </animateMotion>`;
+    svg.appendChild(animate);
+
+    paths.push({ el: path, from: fk.from, to: fk.to });
+  });
+
+  // Hover interactions on cards
+  Object.keys(tableEls).forEach(tableId => {
+    const card = tableEls[tableId];
+    card.addEventListener('mouseenter', () => {
+      const cards = document.querySelectorAll('.table-card');
+      const involved = new Set([tableId]);
+      paths.forEach(p => {
+        if (p.from === tableId || p.to === tableId) {
+          involved.add(p.from);
+          involved.add(p.to);
+          p.el.classList.add('active');
+          p.el.classList.remove('dimmed');
+        } else {
+          p.el.classList.add('dimmed');
+          p.el.classList.remove('active');
+        }
+      });
+      cards.forEach(c => {
+        const cid = c.id.replace('card-','');
+        if (!involved.has(cid)) c.classList.add('dimmed');
+        else c.classList.remove('dimmed');
+      });
+    });
+    card.addEventListener('mouseleave', () => {
+      document.querySelectorAll('.table-card').forEach(c => c.classList.remove('dimmed','active'));
+      paths.forEach(p => p.el.classList.remove('active','dimmed'));
+    });
+  });
+
+  // Tooltip on paths (pointer events re-enabled for tooltip layer)
+  const tooltip = document.getElementById('tooltip');
+  paths.forEach(p => {
+    p.el.style.pointerEvents = 'stroke';
+    p.el.addEventListener('mouseenter', e => {
+      tooltip.textContent = p.el.dataset.label;
+      tooltip.style.display = 'block';
+    });
+    p.el.addEventListener('mousemove', e => {
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top  = (e.clientY - 10) + 'px';
+    });
+    p.el.addEventListener('mouseleave', () => {
+      tooltip.style.display = 'none';
+    });
+  });
+}));
+</script>
+</body>
+</html>

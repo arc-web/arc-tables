@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lead → Client Flow</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #06060f;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  color: #e0e8ff;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content:'';
+  position:fixed;
+  inset:0;
+  background-image: radial-gradient(circle, rgba(0,200,255,0.06) 1px, transparent 1px);
+  background-size:28px 28px;
+  pointer-events:none;
+  z-index:0;
+}
+
+h1 {
+  text-align:center;
+  padding:28px 0 4px;
+  font-size:12px;
+  letter-spacing:5px;
+  text-transform:uppercase;
+  color:rgba(0,200,255,0.45);
+  position:relative; z-index:10;
+}
+#sub {
+  text-align:center;
+  font-size:10px;
+  color:rgba(255,255,255,0.18);
+  letter-spacing:2px;
+  margin-bottom:30px;
+  position:relative;z-index:10;
+}
+
+/* ─── FLOW TRACK ─── */
+#flow {
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+  gap:0;
+  padding:0 40px 60px;
+  position:relative;
+  z-index:2;
+}
+
+/* ─── STAGE BLOCK ─── */
+.stage {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  flex:0 0 auto;
+}
+
+.stage-label {
+  font-size:9px;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  color:rgba(255,255,255,0.22);
+  text-align:center;
+  margin-bottom:2px;
+}
+
+/* ─── TABLE CARD ─── */
+.card {
+  background:rgba(10,14,30,0.94);
+  border-radius:12px;
+  border:1px solid rgba(0,200,255,0.2);
+  min-width:190px;
+  box-shadow:0 0 24px rgba(0,200,255,0.06);
+  transition:box-shadow .2s, border-color .2s, transform .2s;
+}
+.card:hover {
+  border-color:rgba(0,200,255,0.55);
+  box-shadow:0 0 36px rgba(0,200,255,0.16);
+  transform:translateY(-3px);
+}
+.card.orange { border-color:rgba(255,140,0,0.25); box-shadow:0 0 24px rgba(255,140,0,0.06); }
+.card.orange:hover { border-color:rgba(255,140,0,0.6); box-shadow:0 0 36px rgba(255,140,0,0.16); }
+.card.green { border-color:rgba(0,220,130,0.25); box-shadow:0 0 24px rgba(0,220,130,0.06); }
+.card.green:hover { border-color:rgba(0,220,130,0.6); box-shadow:0 0 36px rgba(0,220,130,0.16); }
+.card.dim { border-color:rgba(255,255,255,0.08); opacity:0.7; }
+
+.card-head {
+  padding:10px 14px 8px;
+  border-bottom:1px solid rgba(255,255,255,0.05);
+}
+.card-title {
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:2px;
+  text-transform:uppercase;
+  color:#00d4ff;
+}
+.card.orange .card-title { color:#ff8c00; }
+.card.green .card-title { color:#00dc82; }
+.card.dim .card-title { color:rgba(255,255,255,0.3); }
+
+.card-badge {
+  font-size:9px;
+  color:rgba(255,255,255,0.22);
+  margin-top:2px;
+  letter-spacing:1px;
+}
+
+.col-list { padding:8px 0 10px; }
+.col {
+  padding:3px 14px;
+  font-size:10.5px;
+  color:rgba(180,195,255,0.55);
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+.col.pk { color:rgba(170,170,255,0.65); }
+.col.fk { color:#00d4ff; }
+.col.fk-o { color:#ff8c00; }
+.col.fk-g { color:#00dc82; }
+.col.strike { text-decoration:line-through; color:rgba(255,80,80,0.5); }
+.col.derived { color:rgba(100,200,140,0.7); font-style:italic; }
+
+.dot { width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0; }
+.col.pk .dot { background:rgba(160,160,255,0.5); }
+.col.fk .dot { background:#00d4ff; box-shadow:0 0 4px #00d4ff; }
+.col.fk-o .dot { background:#ff8c00; box-shadow:0 0 4px #ff8c00; }
+.col.fk-g .dot { background:#00dc82; box-shadow:0 0 4px #00dc82; }
+.col.strike .dot { background:rgba(255,80,80,0.3); }
+.col.derived .dot { background:rgba(100,200,140,0.5); }
+
+/* ─── ARROW CONNECTOR ─── */
+.arrow-wrap {
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:0 8px;
+  padding-top:52px; /* align to card body area */
+  gap:4px;
+  flex:0 0 auto;
+}
+.arrow-line {
+  width:60px;
+  height:2px;
+  background:linear-gradient(90deg, rgba(0,200,255,0.15), rgba(0,200,255,0.6), rgba(0,200,255,0.15));
+  position:relative;
+  border-radius:1px;
+}
+.arrow-line::after {
+  content:'';
+  position:absolute;
+  right:-1px; top:-4px;
+  border-top:5px solid transparent;
+  border-bottom:5px solid transparent;
+  border-left:8px solid rgba(0,200,255,0.6);
+}
+.arrow-line.orange {
+  background:linear-gradient(90deg, rgba(255,140,0,0.15), rgba(255,140,0,0.6), rgba(255,140,0,0.15));
+}
+.arrow-line.orange::after { border-left-color:rgba(255,140,0,0.6); }
+.arrow-line.green {
+  background:linear-gradient(90deg, rgba(0,220,130,0.15), rgba(0,220,130,0.6), rgba(0,220,130,0.15));
+}
+.arrow-line.green::after { border-left-color:rgba(0,220,130,0.6); }
+
+/* animated dot on arrow */
+.arrow-dot {
+  position:absolute;
+  top:-3px; left:0;
+  width:8px; height:8px;
+  border-radius:50%;
+  background:#00d4ff;
+  box-shadow:0 0 6px #00d4ff;
+  animation:slidedot 2s linear infinite;
+}
+.arrow-line.orange .arrow-dot { background:#ff8c00; box-shadow:0 0 6px #ff8c00; }
+.arrow-line.green .arrow-dot { background:#00dc82; box-shadow:0 0 6px #00dc82; }
+
+@keyframes slidedot {
+  0% { left:0; opacity:0; }
+  10% { opacity:1; }
+  90% { opacity:1; }
+  100% { left:calc(100% - 8px); opacity:0; }
+}
+
+.arrow-label {
+  font-size:9px;
+  color:rgba(255,255,255,0.2);
+  letter-spacing:1px;
+  text-align:center;
+  max-width:70px;
+}
+
+/* ─── STATUS PILLS ─── */
+.pills {
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  justify-content:center;
+  max-width:190px;
+}
+.pill {
+  padding:3px 10px;
+  border-radius:20px;
+  font-size:9px;
+  letter-spacing:1px;
+  text-transform:uppercase;
+  border:1px solid;
+}
+.pill.new { color:#aaa; border-color:rgba(180,180,180,0.2); background:rgba(180,180,180,0.04); }
+.pill.q { color:#00d4ff; border-color:rgba(0,212,255,0.3); background:rgba(0,212,255,0.05); }
+.pill.prop { color:#cc88ff; border-color:rgba(180,100,255,0.3); background:rgba(180,100,255,0.05); }
+.pill.neg { color:#ff8c00; border-color:rgba(255,140,0,0.3); background:rgba(255,140,0,0.06); }
+.pill.won { color:#00dc82; border-color:rgba(0,220,130,0.35); background:rgba(0,220,130,0.06); }
+.pill.lost { color:rgba(255,80,80,0.7); border-color:rgba(255,80,80,0.2); background:rgba(255,80,80,0.04); }
+
+/* ─── NOTES BOX ─── */
+.note-box {
+  position:relative; z-index:2;
+  max-width:760px;
+  margin:30px auto 0;
+  background:rgba(10,14,28,0.9);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:12px;
+  padding:20px 28px;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:20px 40px;
+}
+.note-section h3 {
+  font-size:9px;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  color:rgba(0,200,255,0.4);
+  margin-bottom:10px;
+}
+.note-item {
+  font-size:10.5px;
+  color:rgba(200,210,255,0.5);
+  line-height:1.7;
+  margin-bottom:4px;
+  padding-left:12px;
+  position:relative;
+}
+.note-item::before {
+  content:'–';
+  position:absolute;
+  left:0;
+  color:rgba(0,200,255,0.3);
+}
+.note-item.warn::before { color:rgba(255,80,80,0.5); content:'✕'; }
+.note-item.ok::before { color:rgba(0,220,130,0.5); content:'✓'; }
+
+/* shared tables floating below */
+#shared {
+  display:flex;
+  justify-content:center;
+  gap:30px;
+  padding:30px 40px 0;
+  position:relative;
+  z-index:2;
+}
+
+.shared-label {
+  font-size:9px;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  color:rgba(255,255,255,0.18);
+  text-align:center;
+  margin-bottom:10px;
+}
+
+/* connector lines from flow down to shared */
+#svg-shared {
+  position:absolute;
+  top:0;left:0;width:100%;height:100%;
+  pointer-events:none;
+  z-index:1;
+  overflow:visible;
+}
+</style>
+</head>
+<body>
+
+<h1>Lead → Client Lifecycle</h1>
+<div id="sub">data model · flow · status stages</div>
+
+<!-- MAIN FLOW -->
+<div id="flow">
+
+  <!-- COMPANIES (shared anchor) -->
+  <div class="stage">
+    <div class="stage-label">Master Org</div>
+    <div class="card dim" id="co-card">
+      <div class="card-head">
+        <div class="card-title">companies</div>
+        <div class="card-badge">129 rows · all orgs</div>
+      </div>
+      <div class="col-list">
+        <div class="col pk"><span class="dot"></span>id</div>
+        <div class="col"><span class="dot"></span>company_name</div>
+        <div class="col"><span class="dot"></span>website</div>
+        <div class="col"><span class="dot"></span>company_type</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- arrow: companies → leads -->
+  <div class="arrow-wrap">
+    <div class="arrow-line orange"><div class="arrow-dot"></div></div>
+    <div class="arrow-label">lookup name</div>
+  </div>
+
+  <!-- LEADS -->
+  <div class="stage">
+    <div class="stage-label">Pipeline</div>
+    <div class="card orange" id="lead-card">
+      <div class="card-head">
+        <div class="card-title">leads</div>
+        <div class="card-badge">prospects · not yet signed</div>
+      </div>
+      <div class="col-list">
+        <div class="col pk"><span class="dot"></span>id</div>
+        <div class="col strike"><span class="dot"></span>name <small style="font-size:9px;color:rgba(255,80,80,0.5)">← redundant</small></div>
+        <div class="col fk-o"><span class="dot"></span>company_id → companies</div>
+        <div class="col fk-o"><span class="dot"></span>contact_id → contacts</div>
+        <div class="col fk-o"><span class="dot"></span>referral_contact_id → contacts</div>
+        <div class="col"><span class="dot"></span>lead_status</div>
+        <div class="col"><span class="dot"></span>pipeline_stage</div>
+        <div class="col"><span class="dot"></span>lead_score</div>
+        <div class="col"><span class="dot"></span>estimated_value</div>
+        <div class="col"><span class="dot"></span>probability</div>
+        <div class="col"><span class="dot"></span>next_follow_up_at</div>
+        <div class="col fk-g"><span class="dot"></span>converted_to_client_id → clients</div>
+        <div class="col"><span class="dot"></span>converted_at</div>
+      </div>
+    </div>
+
+    <!-- pipeline stages -->
+    <div class="pills">
+      <div class="pill new">New</div>
+      <div class="pill q">Qualified</div>
+      <div class="pill prop">Proposed</div>
+      <div class="pill neg">Negotiating</div>
+      <div class="pill won">Converted ✓</div>
+      <div class="pill lost">Lost</div>
+    </div>
+  </div>
+
+  <!-- arrow: leads → clients (conversion) -->
+  <div class="arrow-wrap">
+    <div class="arrow-line green"><div class="arrow-dot"></div></div>
+    <div class="arrow-label">on convert</div>
+  </div>
+
+  <!-- CLIENTS -->
+  <div class="stage">
+    <div class="stage-label">Signed Contracts</div>
+    <div class="card green" id="client-card">
+      <div class="card-head">
+        <div class="card-title">clients</div>
+        <div class="card-badge">126 rows · active accounts</div>
+      </div>
+      <div class="col-list">
+        <div class="col pk"><span class="dot"></span>id</div>
+        <div class="col fk-g"><span class="dot"></span>company_id → companies</div>
+        <div class="col"><span class="dot"></span>status_crm_ghl</div>
+        <div class="col"><span class="dot"></span>google_ads_account_id</div>
+        <div class="col"><span class="dot"></span>facebook_ads_account_id</div>
+        <div class="col"><span class="dot"></span>discord_channel_id</div>
+        <div class="col"><span class="dot"></span>slack_channel_id</div>
+        <div class="col"><span class="dot"></span>qb_customer_id</div>
+        <div class="col"><span class="dot"></span>plane_project_id</div>
+        <div class="col derived"><span class="dot"></span>← lead history via leads.converted_to_client_id</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- arrow: clients → companies -->
+  <div class="arrow-wrap">
+    <div class="arrow-line"><div class="arrow-dot"></div></div>
+    <div class="arrow-label">org identity</div>
+  </div>
+
+  <!-- COMPANIES (right anchor) -->
+  <div class="stage">
+    <div class="stage-label">Master Org</div>
+    <div class="card dim">
+      <div class="card-head">
+        <div class="card-title">companies</div>
+        <div class="card-badge">same table</div>
+      </div>
+      <div class="col-list">
+        <div class="col pk"><span class="dot"></span>id</div>
+        <div class="col"><span class="dot"></span>company_name</div>
+        <div class="col"><span class="dot"></span>website</div>
+        <div class="col"><span class="dot"></span>company_type</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- NOTES -->
+<div class="note-box">
+  <div class="note-section">
+    <h3>How the flow works</h3>
+    <div class="note-item ok">Company is created in <strong>companies</strong> first (or already exists)</div>
+    <div class="note-item ok">Lead is created with <strong>company_id</strong> → companies and <strong>contact_id</strong> → contacts</div>
+    <div class="note-item ok">Lead moves through pipeline stages: new → qualified → proposed → negotiating</div>
+    <div class="note-item ok">On sign: new row added to <strong>clients</strong>, then <strong>leads.converted_to_client_id</strong> set to that new client row</div>
+    <div class="note-item ok">Lead record stays forever — history is preserved. Query it any time from the client side</div>
+    <div class="note-item ok">Company name always comes from <strong>companies.company_name</strong> — one source of truth</div>
+  </div>
+  <div class="note-section">
+    <h3>What needs cleaning</h3>
+    <div class="note-item warn"><strong>leads.name</strong> is redundant — company name lives in companies.company_name, deal name isn't being tracked separately</div>
+    <div class="note-item ok">No FK needed from clients→leads — the reverse link (leads.converted_to_client_id) already makes the join work both ways</div>
+    <div class="note-item ok"><strong>contacts</strong> table holds the person; <strong>companies</strong> holds the org — both are shared between leads and clients, no duplication</div>
+    <div class="note-item warn">Consider adding a <strong>deal_name</strong> column to leads if you want to track the opportunity name separately from the company name (e.g. "TheBoldMD — Google Ads Expansion")</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Client Ecosystem</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#06060f;
+  font-family:'SF Mono','Fira Code',monospace;
+  color:#e0e8ff;
+  overflow-x:hidden;
+}
+body::before {
+  content:'';
+  position:fixed;inset:0;
+  background-image:radial-gradient(circle,rgba(0,200,255,0.055) 1px,transparent 1px);
+  background-size:28px 28px;
+  pointer-events:none;z-index:0;
+}
+h1 {
+  text-align:center;padding:26px 0 3px;
+  font-size:12px;letter-spacing:5px;text-transform:uppercase;
+  color:rgba(0,200,255,0.4);position:relative;z-index:10;
+}
+#sub {
+  text-align:center;font-size:10px;color:rgba(255,255,255,0.16);
+  letter-spacing:2px;margin-bottom:20px;position:relative;z-index:10;
+}
+
+/* ── CANVAS ── */
+#canvas {
+  position:relative;
+  width:1500px;height:1120px;
+  margin:0 auto;
+}
+svg#conn {
+  position:absolute;inset:0;width:100%;height:100%;
+  pointer-events:none;z-index:1;overflow:visible;
+}
+
+/* ── CARDS ── */
+.card {
+  position:absolute;
+  background:rgba(9,13,28,0.95);
+  border-radius:11px;
+  border:1px solid rgba(0,200,255,0.18);
+  box-shadow:0 0 22px rgba(0,200,255,0.05);
+  z-index:2;
+  transition:box-shadow .2s,border-color .2s,transform .15s;
+  cursor:default;
+  min-width:175px;
+}
+.card:hover {
+  border-color:rgba(0,200,255,0.55);
+  box-shadow:0 0 34px rgba(0,200,255,0.15);
+  transform:translateY(-2px);
+  z-index:20;
+}
+.card.anchor { border-color:rgba(255,255,255,0.1); }
+.card.anchor:hover { border-color:rgba(255,255,255,0.3); }
+.card.lead-c { border-color:rgba(255,140,0,0.22); box-shadow:0 0 22px rgba(255,140,0,0.05); }
+.card.lead-c:hover { border-color:rgba(255,140,0,0.55); box-shadow:0 0 34px rgba(255,140,0,0.14); }
+.card.money { border-color:rgba(0,220,130,0.22); box-shadow:0 0 22px rgba(0,220,130,0.05); }
+.card.money:hover { border-color:rgba(0,220,130,0.55); box-shadow:0 0 34px rgba(0,220,130,0.14); }
+.card.people { border-color:rgba(180,100,255,0.22); box-shadow:0 0 22px rgba(180,100,255,0.05); }
+.card.people:hover { border-color:rgba(180,100,255,0.55); box-shadow:0 0 34px rgba(180,100,255,0.14); }
+.card.ops { border-color:rgba(255,200,0,0.18); box-shadow:0 0 22px rgba(255,200,0,0.04); }
+.card.ops:hover { border-color:rgba(255,200,0,0.5); box-shadow:0 0 34px rgba(255,200,0,0.12); }
+.card.dimmed { opacity:0.12!important; }
+
+.ch { padding:9px 13px 7px; border-bottom:1px solid rgba(255,255,255,0.05); }
+.ct {
+  font-size:10.5px;font-weight:700;letter-spacing:1.8px;
+  text-transform:uppercase;color:#00d4ff;
+}
+.card.anchor .ct { color:rgba(200,210,255,0.4); }
+.card.lead-c .ct { color:#ff8c00; }
+.card.money .ct { color:#00dc82; }
+.card.people .ct { color:#bb77ff; }
+.card.ops .ct { color:#ffc800; }
+.cb { font-size:9px;color:rgba(255,255,255,0.18);margin-top:2px;letter-spacing:.8px; }
+
+.cl { padding:6px 0 8px; }
+.cr {
+  padding:2.5px 13px;font-size:10px;
+  color:rgba(170,185,255,0.5);
+  display:flex;align-items:center;gap:6px;
+}
+.cr.pk { color:rgba(160,160,255,0.6); }
+.cr.fk { color:#00d4ff; }
+.cr.fk-o { color:#ff8c00; }
+.cr.fk-g { color:#00dc82; }
+.cr.fk-p { color:#bb77ff; }
+.cr.fk-y { color:#ffc800; }
+.cr.warn { color:rgba(255,80,80,0.55);text-decoration:line-through; }
+
+.dot { width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0; }
+.cr.pk .dot { background:rgba(150,150,255,0.5); }
+.cr.fk .dot { background:#00d4ff;box-shadow:0 0 4px #00d4ff88; }
+.cr.fk-o .dot { background:#ff8c00;box-shadow:0 0 4px #ff8c0088; }
+.cr.fk-g .dot { background:#00dc82;box-shadow:0 0 4px #00dc8288; }
+.cr.fk-p .dot { background:#bb77ff;box-shadow:0 0 4px #bb77ff88; }
+.cr.fk-y .dot { background:#ffc800;box-shadow:0 0 4px #ffc80088; }
+.cr.warn .dot { background:rgba(255,80,80,0.4); }
+
+/* SVG path styles */
+.p-cyan { fill:none;stroke:#00d4ff;stroke-width:1.5;stroke-dasharray:7 5;opacity:.5;filter:drop-shadow(0 0 2px #00d4ff55); }
+.p-ora  { fill:none;stroke:#ff8c00;stroke-width:1.5;stroke-dasharray:7 5;opacity:.45;filter:drop-shadow(0 0 2px #ff8c0055); }
+.p-grn  { fill:none;stroke:#00dc82;stroke-width:1.5;stroke-dasharray:7 5;opacity:.45;filter:drop-shadow(0 0 2px #00dc8255); }
+.p-pur  { fill:none;stroke:#bb77ff;stroke-width:1.5;stroke-dasharray:7 5;opacity:.4;filter:drop-shadow(0 0 2px #bb77ff55); }
+.p-yel  { fill:none;stroke:#ffc800;stroke-width:1.5;stroke-dasharray:7 5;opacity:.4;filter:drop-shadow(0 0 2px #ffc80055); }
+
+.p-cyan.hi { opacity:1;stroke-width:2.5; }
+.p-ora.hi  { opacity:1;stroke-width:2.5; }
+.p-grn.hi  { opacity:1;stroke-width:2.5; }
+.p-pur.hi  { opacity:1;stroke-width:2.5; }
+.p-yel.hi  { opacity:1;stroke-width:2.5; }
+.p-cyan.dm,.p-ora.dm,.p-grn.dm,.p-pur.dm,.p-yel.dm { opacity:.04; }
+
+/* LEGEND */
+#legend {
+  position:fixed;bottom:20px;right:20px;
+  background:rgba(9,13,28,0.95);
+  border:1px solid rgba(255,255,255,0.07);
+  border-radius:10px;padding:14px 18px;z-index:100;
+}
+.lt { font-size:9px;letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,0.25);margin-bottom:10px; }
+.li { display:flex;align-items:center;gap:9px;font-size:10px;color:rgba(200,210,255,0.5);margin-bottom:5px; }
+.lb { width:10px;height:10px;border-radius:3px;flex-shrink:0; }
+.lb.c { background:#00d4ff22;border:1px solid #00d4ff66; }
+.lb.o { background:#ff8c0022;border:1px solid #ff8c0066; }
+.lb.g { background:#00dc8222;border:1px solid #00dc8266; }
+.lb.p { background:#bb77ff22;border:1px solid #bb77ff66; }
+.lb.y { background:#ffc80022;border:1px solid #ffc80066; }
+.lb.a { background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12); }
+
+/* TOOLTIP */
+#tip {
+  position:fixed;background:rgba(9,13,28,0.97);
+  border:1px solid rgba(0,200,255,0.3);border-radius:8px;
+  padding:7px 11px;font-size:10px;color:#00d4ff;
+  pointer-events:none;z-index:200;display:none;max-width:260px;
+}
+</style>
+</head>
+<body>
+<h1>ARC CRM — Client Ecosystem</h1>
+<div id="sub">all client tables · relationships · data flow</div>
+
+<div id="canvas">
+  <svg id="conn"></svg>
+</div>
+
+<div id="legend">
+  <div class="lt">Table Groups</div>
+  <div class="li"><div class="lb a"></div>Anchors (companies, contacts)</div>
+  <div class="li"><div class="lb o"></div>Pipeline (leads)</div>
+  <div class="li"><div class="lb c"></div>Core (clients + identity)</div>
+  <div class="li"><div class="lb g"></div>Financial</div>
+  <div class="li"><div class="lb p"></div>People & Comms</div>
+  <div class="li"><div class="lb y"></div>Operations</div>
+</div>
+<div id="tip"></div>
+
+<script>
+const TABLES = [
+  // ── ANCHORS ──
+  { id:'companies', cls:'anchor', x:600, y:20, badge:'129 rows · master orgs',
+    cols:[
+      {n:'id',t:'pk'},{n:'company_name',t:'n'},{n:'website',t:'n'},{n:'company_type',t:'n'}
+    ]
+  },
+  { id:'contacts', cls:'anchor', x:1200, y:20, badge:'72 rows · people',
+    cols:[
+      {n:'id',t:'pk'},{n:'contact_name',t:'n'},{n:'company_id → companies',t:'fk'},{n:'email_primary',t:'n'},{n:'phone',t:'n'}
+    ]
+  },
+
+  // ── PIPELINE ──
+  { id:'leads', cls:'lead-c', x:60, y:160, badge:'pipeline · pre-conversion',
+    cols:[
+      {n:'id',t:'pk'},{n:'company_id → companies',t:'fk-o'},{n:'contact_id → contacts',t:'fk-o'},
+      {n:'referral_contact_id → contacts',t:'fk-o'},{n:'lead_status',t:'n'},{n:'pipeline_stage',t:'n'},
+      {n:'lead_score',t:'n'},{n:'estimated_value',t:'n'},{n:'client_id → clients',t:'fk-o'}
+    ]
+  },
+
+  // ── CORE ──
+  { id:'clients', cls:'', x:560, y:240, badge:'126 rows · signed accounts',
+    cols:[
+      {n:'id',t:'pk'},{n:'company_id → companies',t:'fk'},{n:'status_crm_ghl',t:'n'},
+      {n:'google_ads_account_id',t:'n'},{n:'facebook_ads_account_id',t:'n'},
+      {n:'discord_channel_id',t:'n'},{n:'slack_channel_id',t:'n'},
+      {n:'qb_customer_id',t:'n'},{n:'plane_project_id',t:'n'}
+    ]
+  },
+
+  // ── PEOPLE & COMMS ──
+  { id:'client_contacts', cls:'people', x:1150, y:260, badge:'35 rows · people on accounts',
+    cols:[
+      {n:'client_id → clients',t:'fk-p'},{n:'contact_id → contacts',t:'fk-p'},
+      {n:'role',t:'n'},{n:'assigned_at',t:'n'}
+    ]
+  },
+  { id:'client_comms', cls:'people', x:1150, y:450, badge:'9 rows · email threads',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-p'},{n:'contact_id → contacts',t:'fk-p'},
+      {n:'gmail_thread_id',t:'n'},{n:'subject',t:'n'},{n:'direction',t:'n'},
+      {n:'status',t:'n'},{n:'action_items',t:'n'}
+    ]
+  },
+  { id:'client_team_assignments', cls:'people', x:1150, y:660, badge:'team members on accounts',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-p'},{n:'team_member_id → team',t:'fk-p'},
+      {n:'role',t:'n'},{n:'assigned_at',t:'n'},{n:'assigned_by',t:'n'}
+    ]
+  },
+
+  // ── FINANCIAL ──
+  { id:'client_transactions', cls:'money', x:540, y:740, badge:'financial ledger',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-g'},{n:'type',t:'n'},
+      {n:'amount',t:'n'},{n:'status',t:'n'},{n:'transaction_date',t:'n'},
+      {n:'qb_transaction_id',t:'n'},{n:'stripe_transaction_id',t:'n'},
+      {n:'reconciliation_status',t:'n'}
+    ]
+  },
+  { id:'client_budget', cls:'money', x:110, y:740, badge:'budget & pacing',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-g'},{n:'client_name ⚠',t:'warn'},
+      {n:'service_name',t:'n'},{n:'budget_amount',t:'n'},{n:'monthly_budget',t:'n'},
+      {n:'current_spend',t:'n'},{n:'pacing_percentage',t:'n'}
+    ]
+  },
+  { id:'stripe_clients', cls:'money', x:900, y:940, badge:'stripe customer mapping',
+    cols:[
+      {n:'id',t:'pk'},{n:'internal_customer_id → clients',t:'fk-g'},
+      {n:'stripe_customer_id',t:'n'},{n:'stripe_email',t:'n'}
+    ]
+  },
+
+  // ── OPERATIONS ──
+  { id:'client_information', cls:'ops', x:60, y:450, badge:'8 rows · versioned docs',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_name ⚠',t:'warn'},{n:'document_content',t:'n'},
+      {n:'version',t:'n'},{n:'is_current_version',t:'n'},{n:'change_summary',t:'n'}
+    ]
+  },
+  { id:'client_service_status', cls:'ops', x:60, y:660, badge:'service on/off tracking',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-y'},{n:'client_name ⚠',t:'warn'},
+      {n:'service_name',t:'n'},{n:'service_type',t:'n'},{n:'status',t:'n'},
+      {n:'activated_at',t:'n'}
+    ]
+  },
+  { id:'client_access', cls:'ops', x:800, y:500, badge:'platform access log',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-y'},{n:'platform',t:'n'},
+      {n:'access_level',t:'n'},{n:'granted_at',t:'n'},{n:'revoked_at',t:'n'}
+    ]
+  },
+  { id:'client_products', cls:'ops', x:800, y:700, badge:'services subscribed',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-y'},{n:'product_id → products',t:'fk-y'},
+      {n:'status',t:'n'},{n:'started_at',t:'n'},{n:'ended_at',t:'n'}
+    ]
+  },
+  { id:'client_industries', cls:'ops', x:800, y:870, badge:'industry tags',
+    cols:[
+      {n:'id',t:'pk'},{n:'client_id → clients',t:'fk-y'},
+      {n:'industry_id → industries',t:'fk-y'},{n:'is_primary',t:'n'}
+    ]
+  },
+];
+
+const FKS = [
+  // companies as anchor
+  { f:'leads',           fc:'company_id → companies',         t:'companies', tc:'id', cls:'p-ora', label:'lead org identity' },
+  { f:'clients',         fc:'company_id → companies',         t:'companies', tc:'id', cls:'p-cyan', label:'client org identity' },
+  { f:'contacts',        fc:'company_id → companies',         t:'companies', tc:'id', cls:'p-cyan', label:'contact belongs to org' },
+
+  // leads → clients conversion
+  { f:'leads',           fc:'client_id → clients',            t:'clients',   tc:'id', cls:'p-ora', label:'converted to client' },
+
+  // leads → contacts
+  { f:'leads',           fc:'contact_id → contacts',          t:'contacts',  tc:'id', cls:'p-pur', label:'lead contact person' },
+
+  // clients hub → satellites
+  { f:'client_contacts',       fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-pur', label:'contacts on this account' },
+  { f:'client_comms',          fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-pur', label:'email threads for client' },
+  { f:'client_team_assignments',fc:'client_id → clients',     t:'clients',   tc:'id', cls:'p-pur', label:'team assigned to client' },
+  { f:'client_transactions',   fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-grn', label:'transactions for client' },
+  { f:'client_budget',         fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-grn', label:'budget records for client' },
+  { f:'client_access',         fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-yel', label:'platform access for client' },
+  { f:'client_service_status', fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-yel', label:'service status for client' },
+  { f:'client_products',       fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-yel', label:'products/services subscribed' },
+  { f:'client_industries',     fc:'client_id → clients',      t:'clients',   tc:'id', cls:'p-yel', label:'industry tags for client' },
+  { f:'stripe_clients',        fc:'internal_customer_id → clients',t:'clients',tc:'id',cls:'p-grn',label:'Stripe customer ↔ client mapping' },
+
+  // contacts cross-links
+  { f:'client_contacts', fc:'contact_id → contacts',          t:'contacts',  tc:'id', cls:'p-pur', label:'contact on account' },
+  { f:'client_comms',    fc:'contact_id → contacts',          t:'contacts',  tc:'id', cls:'p-pur', label:'contact in thread' },
+];
+
+// ── RENDER CARDS ──
+const canvas = document.getElementById('canvas');
+const els = {};
+TABLES.forEach(t => {
+  const d = document.createElement('div');
+  d.className = 'card ' + (t.cls||'');
+  d.id = 'card-'+t.id;
+  d.style.cssText = `left:${t.x}px;top:${t.y}px`;
+  const colsHtml = t.cols.map(c => {
+    const cls = c.t==='pk'?'pk':c.t==='warn'?'warn':c.t==='n'?'':c.t;
+    return `<div class="cr ${cls}"><span class="dot"></span>${c.n}</div>`;
+  }).join('');
+  d.innerHTML = `<div class="ch"><div class="ct">${t.id}</div><div class="cb">${t.badge}</div></div><div class="cl">${colsHtml}</div>`;
+  canvas.appendChild(d);
+  els[t.id] = d;
+});
+
+// ── DRAW CONNECTIONS ──
+requestAnimationFrame(()=>requestAnimationFrame(()=>{
+  const svg = document.getElementById('conn');
+  const CR = canvas.getBoundingClientRect();
+
+  function anchor(tableId, colName, side) {
+    const card = els[tableId];
+    const colEl = [...card.querySelectorAll('.cr')].find(el=>el.textContent.trim().startsWith(colName.split(' ')[0]));
+    const rect = card.getBoundingClientRect();
+    const y = colEl
+      ? colEl.getBoundingClientRect().top - CR.top + colEl.getBoundingClientRect().height/2
+      : rect.top - CR.top + rect.height/2;
+    return {
+      x: side==='r' ? rect.right - CR.left : rect.left - CR.left,
+      y,
+      cw: rect.width,
+      cl: rect.left - CR.left,
+      cr: rect.right - CR.left,
+    };
+  }
+
+  function bez(x1,y1,x2,y2) {
+    const dx = Math.min(Math.abs(x2-x1)*0.6, 140);
+    const sx = x1<x2?1:-1;
+    return `M${x1},${y1} C${x1+sx*dx},${y1} ${x2-sx*dx},${y2} ${x2},${y2}`;
+  }
+
+  const paths = [];
+  FKS.forEach((fk,i)=>{
+    const fa = anchor(fk.f, fk.fc, 'auto');
+    const ta = anchor(fk.t, fk.tc, 'auto');
+    // decide exit/entry sides
+    const fromRight = fa.cl < ta.cl;
+    const fx = fromRight ? fa.cr : fa.cl;
+    const tx = fromRight ? ta.cl : ta.cr;
+    const fy = anchor(fk.f, fk.fc, fromRight?'r':'l').y;
+    const ty = anchor(fk.t, fk.tc, fromRight?'l':'r').y;
+
+    const pid = `p${i}`;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', bez(fx,fy,tx,ty));
+    path.setAttribute('class', fk.cls);
+    path.setAttribute('id', pid);
+    path.dataset.from = fk.f;
+    path.dataset.to = fk.t;
+    path.dataset.label = fk.label;
+    svg.appendChild(path);
+
+    // animated dot
+    const dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    const fill = fk.cls==='p-cyan'?'#00d4ff':fk.cls==='p-ora'?'#ff8c00':fk.cls==='p-grn'?'#00dc82':fk.cls==='p-pur'?'#bb77ff':'#ffc800';
+    dot.setAttribute('r','3');
+    dot.setAttribute('fill',fill);
+    dot.setAttribute('filter',`drop-shadow(0 0 3px ${fill})`);
+    const dur = (1.8 + i*0.23).toFixed(2);
+    dot.innerHTML = `<animateMotion dur="${dur}s" repeatCount="indefinite"><mpath href="#${pid}"/></animateMotion>`;
+    svg.appendChild(dot);
+
+    paths.push({el:path, from:fk.f, to:fk.t, label:fk.label});
+  });
+
+  // ── HOVER ──
+  const tip = document.getElementById('tip');
+  Object.keys(els).forEach(id=>{
+    const card = els[id];
+    card.addEventListener('mouseenter',()=>{
+      const involved = new Set([id]);
+      paths.forEach(p=>{
+        if(p.from===id||p.to===id){involved.add(p.from);involved.add(p.to);p.el.classList.add('hi');p.el.classList.remove('dm');}
+        else{p.el.classList.add('dm');p.el.classList.remove('hi');}
+      });
+      Object.keys(els).forEach(cid=>{
+        if(!involved.has(cid))els[cid].classList.add('dimmed');
+        else els[cid].classList.remove('dimmed');
+      });
+    });
+    card.addEventListener('mouseleave',()=>{
+      Object.keys(els).forEach(cid=>els[cid].classList.remove('dimmed'));
+      paths.forEach(p=>p.el.classList.remove('hi','dm'));
+    });
+  });
+
+  paths.forEach(p=>{
+    p.el.style.pointerEvents='stroke';
+    p.el.addEventListener('mouseenter',e=>{tip.textContent=p.label;tip.style.display='block';});
+    p.el.addEventListener('mousemove',e=>{tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY-10)+'px';});
+    p.el.addEventListener('mouseleave',()=>tip.style.display='none');
+  });
+}));
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "name": "@arc-web/arc-tables",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Database schema visualizer + auditor. Animated HTML maps and SQL fix recommendations for Postgres, Supabase, MySQL, SQLite.",
+  "bin": {
+    "arc-tables": "./bin/arc-tables"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "bin",
+    "dist",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node bin/arc-tables",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "commander": "12.1.0",
+    "js-yaml": "4.1.0",
+    "pg": "8.13.1"
+  },
+  "optionalDependencies": {
+    "mysql2": "3.11.5",
+    "better-sqlite3": "11.7.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "4.0.9",
+    "@types/node": "22.10.5",
+    "@types/pg": "8.11.10",
+    "typescript": "5.7.3"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arc-web/arc-tables.git"
+  },
+  "license": "UNLICENSED",
+  "private": true
+}

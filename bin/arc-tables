@@ -1,0 +1,9 @@
+#!/usr/bin/env node
+import('../dist/cli.js').catch((err) => {
+  if (err && err.code === 'ERR_MODULE_NOT_FOUND') {
+    console.error('arc-tables: build artifacts missing. Run `npm run build` first.');
+    process.exit(2);
+  }
+  console.error(err);
+  process.exit(1);
+});

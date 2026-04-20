@@ -1,0 +1,47 @@
+# arc-tables sidecar annotations - example for ARC CRM Supabase project
+# Sidecar wins over DB COMMENT ON values.
+
+profile: arc-prod
+
+groups:
+  anchors:
+    color: white
+    members: [companies, contacts]
+  pipeline:
+    color: orange
+    members: [leads]
+  core:
+    color: cyan
+    members: [clients]
+  financial:
+    color: green
+    members: [client_transactions, client_budget, stripe_clients, stripe_subscriptions]
+  people:
+    color: purple
+    members: [client_contacts, client_comms, client_team_assignments]
+  ops:
+    color: yellow
+    members: [client_access, client_products, client_industries, client_service_status, client_information]
+
+tables:
+  companies:
+    description: "Master org list - every organization we work with (clients, vendors, partners)."
+    columns:
+      company_type: "client / vendor / partner / accounting / other"
+  clients:
+    description: "Signed contracts and account-level data. One row = one active customer relationship."
+    columns:
+      company_id: "Links to companies for org identity (name, website, type)."
+  leads:
+    description: "Pipeline / pre-conversion. When a lead signs, client_id is filled with the new clients row."
+    columns:
+      client_id: "Set on conversion - links the lead to its client record."
+  client_information:
+    description: "Versioned per-client knowledge base / notes."
+    flag: "orphaned-no-fk"
+
+layout:
+  companies: { x: 600, y: 20 }
+  contacts:  { x: 1200, y: 20 }
+  leads:     { x: 60,   y: 160 }
+  clients:   { x: 560,  y: 240 }

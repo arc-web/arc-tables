@@ -1,0 +1,8 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+arc-tables-*.html
+arc-tables-*.sql
+arc-tables.*.yaml
+!examples/arc-tables.example.yaml
