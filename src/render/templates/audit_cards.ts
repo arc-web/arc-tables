@@ -58,18 +58,19 @@ ${cardCss}
   </section>
 </main>
 
-<!-- Diagram modal - shows the focused table + its neighbors -->
+<!-- Diagram modal - focused diagram + sticky footer with the same actions as the card -->
 <div id="diagram-modal" class="modal">
   <div class="modal-head">
     <button id="diagram-back" class="btn-back">\u2190 Back to card</button>
     <div id="diagram-title" class="modal-title"></div>
+    <div class="modal-hint-inline">drag to pan \u00B7 ctrl+scroll to zoom \u00B7 R to reset</div>
   </div>
   <div id="diagram-viewport" class="modal-viewport">
     <div id="diagram-canvas" class="modal-canvas">
       <svg id="diagram-svg"></svg>
     </div>
   </div>
-  <div class="modal-hint">Click + drag to pan \u00B7 Ctrl + scroll to zoom \u00B7 Hover any line for details \u00B7 Press R to reset view</div>
+  <footer class="modal-footer" id="diagram-footer"></footer>
 </div>
 
 <script>
@@ -225,10 +226,13 @@ function renderCard() {
       // Save any in-progress note first so it's there when they come back
       const ni = document.getElementById('note-input');
       if (ni) setNote(f, i, ni.value.trim());
-      openDiagram(diagBtn.dataset.showDiagram, f.plainTitle);
+      openDiagram(f, i);
     });
   }
 }
+
+// Track which finding is currently shown in the diagram modal
+let diagramCurrent = { f: null, i: -1 };
 
 // --- Focused diagram modal ---
 // Pan/zoom state for the diagram canvas
@@ -253,12 +257,73 @@ function resetView() {
   applyView();
 }
 
-function openDiagram(centerTable, title) {
+function openDiagram(finding, index) {
+  diagramCurrent = { f: finding, i: index };
   const modal = document.getElementById('diagram-modal');
-  document.getElementById('diagram-title').textContent = title;
+  document.getElementById('diagram-title').textContent = finding.plainTitle;
   modal.classList.add('open');
   resetView();
+  const centerTable = (finding.table || '').split(' / ')[0];
   renderFocusedDiagram(centerTable);
+  renderDiagramFooter(finding, index);
+}
+
+function renderDiagramFooter(f, i) {
+  const footer = document.getElementById('diagram-footer');
+  const cat = CATEGORY_LABEL[f.category] || CATEGORY_LABEL.cleanup;
+  const note = noteFor(f, i);
+
+  footer.innerHTML =
+    '<div class="footer-grid">' +
+      '<div class="footer-col footer-text">' +
+        '<div class="footer-tag" style="color:' + cat.color + '; border-color:' + cat.color + '44; background:' + cat.color + '12">' + cat.label + '</div>' +
+        '<div class="footer-section"><div class="footer-label">What\\'s going on</div><div class="footer-body">' + escapeHtml(f.plainWhat) + '</div></div>' +
+        '<div class="footer-section"><div class="footer-label">Why it matters</div><div class="footer-body">' + escapeHtml(f.plainWhy) + '</div></div>' +
+        '<div class="footer-section"><div class="footer-label">What fixing it looks like</div><div class="footer-body">' + escapeHtml(f.plainFix) + '</div></div>' +
+      '</div>' +
+      '<div class="footer-col footer-action">' +
+        '<label class="footer-label">Add a note (optional)</label>' +
+        '<textarea id="diagram-note-input" placeholder="Why are you making this decision? What context matters?">' + escapeHtml(note) + '</textarea>' +
+        '<div class="footer-actions">' +
+          '<button class="btn dismiss" data-diag-action="dismiss">\u2715 Won\\'t fix</button>' +
+          '<button class="btn skip" data-diag-action="skip">\u23ED Skip for now</button>' +
+          '<button class="btn fix" data-diag-action="fix">\u2713 Fix this</button>' +
+        '</div>' +
+        '<div class="footer-meta">' + (i + 1) + ' of ' + FINDINGS.length + ' \u00B7 ' + escapeHtml(f.rule) + '</div>' +
+      '</div>' +
+    '</div>';
+
+  // Auto-save note on blur
+  const dni = document.getElementById('diagram-note-input');
+  if (dni) {
+    dni.addEventListener('blur', () => setNote(f, i, dni.value.trim()));
+  }
+
+  // Wire footer actions
+  footer.querySelectorAll('[data-diag-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const ni = document.getElementById('diagram-note-input');
+      if (ni && ni.value.trim()) setNote(f, i, ni.value.trim());
+      setDecision(f, i, btn.dataset.diagAction);
+      state.currentIndex = i + 1;
+      saveState();
+      updateProgress();
+
+      // Find next undecided finding
+      let nextI = state.currentIndex;
+      while (nextI < FINDINGS.length && decisionFor(FINDINGS[nextI], nextI)) nextI++;
+
+      if (nextI >= FINDINGS.length) {
+        // All done - close modal, show finish state in card view
+        closeDiagram();
+        renderCard();
+      } else {
+        // Stay in diagram mode and advance to next finding
+        const nextF = FINDINGS[nextI];
+        openDiagram(nextF, nextI);
+      }
+    });
+  });
 }
 
 function closeDiagram() {
@@ -363,13 +428,9 @@ function renderFocusedDiagram(centerName) {
 
   const neighbors = [...neighborNames].map((n) => SCHEMA_TABLES.find((t) => t.name === n)).filter(Boolean);
 
-  // If no neighbors, show isolated message
+  // If no neighbors, just show the centered card. The footer text explains the orphan state.
   if (neighbors.length === 0) {
     placeMiniCard(canvas, center, 600, 280, true);
-    const note = document.createElement('div');
-    note.className = 'diagram-empty';
-    note.innerHTML = '<strong>"' + escapeHtml(centerName) + '" has no connections to other tables.</strong><br><br>It\\'s a standalone table - nothing links into it, and it doesn\\'t link out to anything.';
-    canvas.appendChild(note);
     return;
   }
 
@@ -865,21 +926,64 @@ main { max-width:1100px; margin:0 auto; padding:0 28px 80px; position:relative; 
 }
 .mini-path:hover { opacity:1; stroke-width:2.5; }
 
-.modal-hint {
-  padding:12px 28px; font-size:11px; color:rgba(255,255,255,0.35);
-  font-family:system-ui, sans-serif; text-align:center;
-  border-top:1px solid rgba(255,255,255,0.05);
-}
-.diagram-empty {
-  position:absolute; top:50%; left:50%; transform:translate(-50%, calc(-50% + 100px));
-  text-align:center; color:rgba(220,230,255,0.55); font-family:system-ui, sans-serif;
-  font-size:14px; line-height:1.6; max-width:480px;
+.modal-hint-inline {
+  font-size:10px; letter-spacing:1.2px; color:rgba(255,255,255,0.3);
+  font-family:'SF Mono', monospace; margin-left:auto;
 }
 .diag-tip {
   position:fixed; background:rgba(9,13,28,0.97); border:1px solid rgba(0,200,255,0.3);
   border-radius:8px; padding:7px 12px; font-size:11px; color:#00d4ff;
   pointer-events:none; z-index:600; display:none; max-width:300px;
   font-family:'SF Mono', monospace;
+}
+
+/* Modal footer - sticky panel with the same options as the card */
+.modal-footer {
+  background:rgba(9,13,28,0.97);
+  border-top:1px solid rgba(0,200,255,0.18);
+  padding:18px 28px 16px;
+  max-height:42vh; overflow-y:auto;
+  box-shadow:0 -8px 30px rgba(0,0,0,0.4);
+}
+.footer-grid {
+  display:grid; grid-template-columns:1fr 360px; gap:28px;
+  max-width:1300px; margin:0 auto;
+}
+.footer-col.footer-text { min-width:0; }
+.footer-col.footer-action { display:flex; flex-direction:column; }
+.footer-tag {
+  display:inline-block; padding:4px 12px; border-radius:18px; border:1px solid;
+  font-size:9px; letter-spacing:2px; text-transform:uppercase; font-weight:600; margin-bottom:10px;
+}
+.footer-section { margin-bottom:8px; }
+.footer-label {
+  font-size:9px; letter-spacing:2.5px; text-transform:uppercase; color:rgba(0,200,255,0.55);
+  font-weight:600; margin-bottom:3px; display:block;
+}
+.footer-body {
+  font-size:13px; line-height:1.55; color:rgba(220,230,255,0.78);
+  font-family:system-ui, -apple-system, sans-serif;
+}
+.footer-action textarea {
+  width:100%; flex:0 0 auto; min-height:54px; max-height:90px;
+  background:rgba(0,0,0,0.3); border:1px solid rgba(255,255,255,0.08);
+  border-radius:8px; padding:8px 12px; color:#e0e8ff; font-size:12.5px;
+  font-family:system-ui, -apple-system, sans-serif; resize:vertical;
+  outline:none; transition:border-color .15s; line-height:1.5; margin-bottom:10px;
+}
+.footer-action textarea:focus { border-color:rgba(0,200,255,0.5); }
+.footer-action textarea::placeholder { color:rgba(255,255,255,0.25); }
+.footer-actions { display:flex; gap:8px; }
+.footer-actions .btn { flex:1; padding:10px 12px; font-size:12.5px; }
+.footer-meta {
+  margin-top:8px; font-family:'SF Mono', monospace; font-size:10px;
+  color:rgba(255,255,255,0.25); letter-spacing:1px; text-align:right;
+}
+
+@media (max-width: 800px) {
+  .footer-grid { grid-template-columns:1fr; gap:14px; }
+  .footer-actions { flex-direction:column; }
+  .modal-footer { max-height:55vh; }
 }
 `.trim();
 
