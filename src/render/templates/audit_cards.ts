@@ -174,12 +174,14 @@ function renderCard() {
   const note = noteFor(f, i);
 
   stage.innerHTML = '<article class="review-card">' +
-    '<div class="card-tag" style="color:' + cat.color + '; border-color:' + cat.color + '44; background:' + cat.color + '12">' + cat.label + '</div>' +
+    '<div class="card-top-row">' +
+      '<div class="card-tag" style="color:' + cat.color + '; border-color:' + cat.color + '44; background:' + cat.color + '12">' + cat.label + '</div>' +
+      (f.table ? '<button class="btn-diagram" data-show-diagram="' + escapeHtml(f.table.split(' / ')[0]) + '" title="See this table in context">\ud83d\uddfa View diagram</button>' : '') +
+    '</div>' +
     '<h2 class="card-title">' + escapeHtml(f.plainTitle) + '</h2>' +
     '<div class="card-section"><div class="card-label">What\\'s going on</div><div class="card-body">' + escapeHtml(f.plainWhat) + '</div></div>' +
     '<div class="card-section"><div class="card-label">Why it matters</div><div class="card-body">' + escapeHtml(f.plainWhy) + '</div></div>' +
     '<div class="card-section"><div class="card-label">What fixing it looks like</div><div class="card-body">' + escapeHtml(f.plainFix) + '</div></div>' +
-    (f.table ? '<button class="btn-diagram" data-show-diagram="' + escapeHtml(f.table.split(' / ')[0]) + '">\ud83d\uddfa Show me where this lives in the database</button>' : '') +
     (f.fixSql ? '<details class="card-sql"><summary>Show the technical fix (SQL)</summary><pre><code>' + escapeHtml(f.fixSql) + '</code></pre></details>' : '') +
     '<div class="note-row">' +
       '<label class="card-label">Add a note (optional)</label>' +
@@ -683,17 +685,23 @@ main { max-width:1100px; margin:0 auto; padding:0 28px 80px; position:relative; 
   .actions { flex-direction:column; }
 }
 
-/* Diagram button on card */
+/* Top row of card: category tag + diagram button */
+.card-top-row {
+  display:flex; align-items:center; justify-content:space-between;
+  margin-bottom:18px; gap:12px;
+}
+.card-top-row .card-tag { margin-bottom:0; }
+
 .btn-diagram {
-  display:block; width:100%; margin:18px 0 0;
-  background:rgba(0,212,255,0.07); color:#00d4ff;
-  border:1px solid rgba(0,212,255,0.3); padding:12px 18px;
-  border-radius:10px; font-family:system-ui, sans-serif; font-size:13px;
-  cursor:pointer; transition:all .15s; font-weight:500; letter-spacing:.2px;
+  background:rgba(0,212,255,0.1); color:#00d4ff;
+  border:1px solid rgba(0,212,255,0.4); padding:7px 14px;
+  border-radius:20px; font-family:system-ui, sans-serif; font-size:12px;
+  cursor:pointer; transition:all .15s; font-weight:600; letter-spacing:.2px;
+  display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
 }
 .btn-diagram:hover {
-  background:rgba(0,212,255,0.15); border-color:rgba(0,212,255,0.6);
-  box-shadow:0 0 18px rgba(0,212,255,0.18);
+  background:rgba(0,212,255,0.22); border-color:rgba(0,212,255,0.7);
+  box-shadow:0 0 18px rgba(0,212,255,0.25); transform:translateY(-1px);
 }
 
 /* Modal */
