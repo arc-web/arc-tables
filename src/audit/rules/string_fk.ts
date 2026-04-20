@@ -1,8 +1,3 @@
-// Detects FK constraints that target a non-id text column when an id sibling exists.
-// Example caught this session: client_information.client_name FK -> clients.name,
-// while clients.id was the proper UUID PK. Recommendation: drop the string FK,
-// keep/add the id-based FK instead.
-
 import type { Schema, AuditFinding } from '../../types.js';
 
 export function stringFkRule(schema: Schema): AuditFinding[] {
@@ -20,8 +15,13 @@ export function stringFkRule(schema: Schema): AuditFinding[] {
       severity: 'warning',
       table: fk.fromTable,
       column: fk.fromColumn,
-      description: `FK "${fk.name}" targets ${fk.toTable}.${fk.toColumn} (text) instead of ${fk.toTable}.id (uuid). Drop the string FK and link by id.`,
+      category: 'connection',
+      description: `FK "${fk.name}" targets ${fk.toTable}.${fk.toColumn} (text) instead of ${fk.toTable}.id (uuid).`,
       fixSql: `ALTER TABLE ${fk.fromTable} DROP CONSTRAINT ${fk.name};`,
+      plainTitle: `"${fk.fromTable}" links to "${fk.toTable}" using text, not a proper ID`,
+      plainWhat: `The connection between these two tables uses the "${fk.toColumn}" column as the link instead of an ID number. Think of it like organizing a filing cabinet by people's first names instead of employee ID numbers.`,
+      plainWhy: `Text-based links break the moment you rename anything. Two records with the same name get tangled. It's slower for the database to look up. The proper way is to use the unique ID that never changes.`,
+      plainFix: `Drop the text-based connection. There's already an ID-based connection available, or one needs to be added.`,
     });
   }
   return findings;

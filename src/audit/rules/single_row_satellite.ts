@@ -1,7 +1,3 @@
-// Detects "satellite" tables that point to a parent via a single FK and have no time component.
-// These often should just be columns on the parent table.
-// Heuristic: table has 1 FK out (to a parent) and no created_at/effective_from/version columns.
-
 import type { Schema, AuditFinding } from '../../types.js';
 
 export function singleRowSatelliteRule(schema: Schema): AuditFinding[] {
@@ -15,12 +11,22 @@ export function singleRowSatelliteRule(schema: Schema): AuditFinding[] {
     if ((fksByTable.get(t.name) ?? 0) !== 1) continue;
     const hasTime = t.columns.some((c) => TIME_COLS.includes(c.name));
     if (hasTime) continue;
-    if (t.columns.length > 12) continue; // wide tables likely warrant their own existence
+    if (t.columns.length > 12) continue;
+
+    // Find the parent
+    const parentFk = schema.foreignKeys.find((fk) => fk.fromTable === t.name);
+    const parent = parentFk?.toTable ?? 'its parent table';
+
     findings.push({
       rule: 'single-row-satellite',
       severity: 'info',
       table: t.name,
-      description: `Table "${t.name}" looks like a single-row-per-parent satellite (1 FK out, no time component). Consider folding its columns into the parent table.`,
+      category: 'structure',
+      description: `Table "${t.name}" looks like a single-row-per-parent satellite.`,
+      plainTitle: `"${t.name}" might just be extra columns on "${parent}"`,
+      plainWhat: `This is its own table, but it only connects to one other table ("${parent}") and doesn't track any history (no created_at/version/effective_from). It's basically holding a few extra fields about each ${parent} record.`,
+      plainWhy: `Splitting things into separate tables makes sense when you have many entries per parent or when you need history. For one-row-per-parent with no history, it's simpler to just add those columns directly to the parent table - one less join, one less thing to keep in sync.`,
+      plainFix: `Move the columns from "${t.name}" onto "${parent}", then drop "${t.name}".`,
     });
   }
   return findings;

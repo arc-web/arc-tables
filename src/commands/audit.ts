@@ -3,12 +3,14 @@ import { getProfile } from '../profile.js';
 import { adapterFromProfile } from '../adapters/index.js';
 import { runAudit } from '../audit/runner.js';
 import { renderAudit } from '../render/templates/audit.js';
+import { renderAuditCards } from '../render/templates/audit_cards.js';
 
 interface AuditOpts {
   profile: string;
   schema: string;
   output: string;
   sql: string;
+  format: 'cards' | 'list';
 }
 
 export async function audit(opts: AuditOpts): Promise<void> {
@@ -19,12 +21,11 @@ export async function audit(opts: AuditOpts): Promise<void> {
     const findings = runAudit(schema);
     console.log(`Found ${findings.length} issues across ${schema.tables.length} tables.`);
 
-    // HTML report
-    const html = renderAudit(schema, findings);
+    const html = opts.format === 'list' ? renderAudit(schema, findings) : renderAuditCards(schema, findings);
     await writeFile(opts.output, html, 'utf8');
-    console.log(`Wrote report: ${opts.output}`);
+    console.log(`Wrote ${opts.format} report: ${opts.output}`);
 
-    // SQL fix file
+    // Always emit the raw SQL as well - users can grab it from the summary tab too
     const sqlLines: string[] = [
       '-- arc-tables suggested fixes',
       `-- Generated against profile "${opts.profile}", schema "${opts.schema}"`,
@@ -33,7 +34,7 @@ export async function audit(opts: AuditOpts): Promise<void> {
     ];
     for (const f of findings) {
       if (!f.fixSql) continue;
-      sqlLines.push(`-- [${f.rule}] ${f.description}`);
+      sqlLines.push(`-- [${f.rule}] ${f.plainTitle}`);
       sqlLines.push(f.fixSql);
       sqlLines.push('');
     }
