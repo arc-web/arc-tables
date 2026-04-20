@@ -15,11 +15,20 @@ program
 
 program
   .command('connect <kind>')
-  .description('Save a connection profile (supabase | postgres | mysql | sqlite)')
+  .description('Save a connection profile (supabase | postgres | mysql | sqlite | ssh)')
   .option('--pat <pat>', 'Supabase Personal Access Token')
   .option('--project <ref>', 'Supabase project ref')
   .option('--conn <connstr>', 'Postgres/MySQL connection string')
   .option('--path <file>', 'SQLite file path')
+  .option('--host <host>', 'SSH host')
+  .option('--port <port>', 'SSH port (default 22)')
+  .option('--user <user>', 'SSH username')
+  .option('--private-key <path>', 'Path to SSH private key')
+  .option('--remote-host <host>', 'Remote DB host (default localhost)')
+  .option('--remote-port <port>', 'Remote DB port (default 5432)')
+  .option('--database <db>', 'Database name')
+  .option('--username <user>', 'Database username')
+  .option('--password <pass>', 'Database password or op:// reference')
   .requiredOption('--as <profile>', 'Profile name to save under')
   .action(async (kind, opts) => {
     const { connect } = await import('./commands/connect.js');

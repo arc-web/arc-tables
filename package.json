@@ -41,6 +41,6 @@
     "type": "git",
     "url": "git+https://github.com/arc-web/arc-tables.git"
   },
-  "license": "UNLICENSED",
-  "private": true
+  "license": "MIT",
+  "private": false
 }

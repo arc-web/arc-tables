@@ -1,8 +1,10 @@
 node_modules/
 dist/
-*.log
 .DS_Store
-arc-tables-*.html
-arc-tables-*.sql
-arc-tables.*.yaml
-!examples/arc-tables.example.yaml
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.env
+.env.local
+~/.arc-tables/

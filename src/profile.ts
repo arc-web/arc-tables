@@ -29,7 +29,20 @@ export interface SqliteProfile {
   path: string;
 }
 
-export type Profile = SupabaseProfile | PostgresProfile | MysqlProfile | SqliteProfile;
+export interface SSHProfile {
+  kind: 'ssh';
+  host: string;
+  port?: number;
+  user: string;
+  privateKey?: string;
+  remoteHost?: string;
+  remotePort?: number;
+  database: string;
+  username?: string;
+  password?: string;
+}
+
+export type Profile = SupabaseProfile | PostgresProfile | MysqlProfile | SqliteProfile | SSHProfile;
 
 interface ProfilesFile {
   profiles: Record<string, Profile>;

@@ -24,5 +24,20 @@ export async function adapterFromProfile(profile: Profile): Promise<Adapter> {
       const { SqliteAdapter } = await import('./sqlite.js');
       return new SqliteAdapter(profile.path);
     }
+    case 'ssh': {
+      const { SSHAdapter } = await import('./ssh.js');
+      const password = profile.password ? await resolveSecret(profile.password) : undefined;
+      return new SSHAdapter({
+        host: profile.host,
+        port: profile.port,
+        user: profile.user,
+        privateKey: profile.privateKey,
+        remoteHost: profile.remoteHost,
+        remotePort: profile.remotePort,
+        database: profile.database,
+        username: profile.username,
+        password,
+      });
+    }
   }
 }
